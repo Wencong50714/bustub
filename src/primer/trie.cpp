@@ -1,6 +1,5 @@
 #include "primer/trie.h"
 #include <strings.h>
-#include <sys/_types/_key_t.h>
 #include <cstddef>
 #include <memory>
 #include <string_view>

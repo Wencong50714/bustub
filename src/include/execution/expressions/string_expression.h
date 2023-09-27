@@ -12,7 +12,6 @@
 
 #pragma once
 
-#include <_ctype.h>
 #include <algorithm>
 #include <cctype>
 #include <string>
