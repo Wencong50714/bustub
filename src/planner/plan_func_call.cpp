@@ -45,7 +45,7 @@ auto Planner::GetFuncCallFromFactory(const std::string &func_name, std::vector<A
   if (args.size() != 1) {
     throw Exception(fmt::format("errored with Incorrect number of args"));
   }
-  
+
   if (func_name == "lower") {
     return std::make_shared<StringExpression>(StringExpression(args[0], StringExpressionType::Lower));
   }

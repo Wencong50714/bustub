@@ -37,8 +37,8 @@ auto Trie::Get(std::string_view key) const -> const T * {
 
 // dfs for put function
 template <class T>
-std::shared_ptr<const TrieNode> PutDfs(const std::shared_ptr<const TrieNode> &root, std::string_view key, size_t index, 
-                                std::shared_ptr<T> value_p){
+std::shared_ptr<const TrieNode> PutDfs(const std::shared_ptr<const TrieNode> &root, std::string_view key, size_t index,
+                                       std::shared_ptr<T> value_p) {
   if (index == key.size()) {
     return std::make_shared<TrieNodeWithValue<T>>(TrieNodeWithValue<T>(root->children_, value_p));
   }
@@ -74,7 +74,8 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
 }
 
 // dfs for remove function
-std::shared_ptr<const TrieNode> RemoveDfs(const std::shared_ptr<const TrieNode> &root, std::string_view key, size_t index) {
+std::shared_ptr<const TrieNode> RemoveDfs(const std::shared_ptr<const TrieNode> &root, std::string_view key,
+                                          size_t index) {
   if (index == key.size()) {
     if (root->children_.empty()) {
       return nullptr;
