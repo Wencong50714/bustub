@@ -1,5 +1,9 @@
 #include "primer/trie.h"
+#include <sys/_types/_key_t.h>
+#include <cstddef>
+#include <memory>
 #include <string_view>
+#include <utility>
 #include "common/exception.h"
 
 namespace bustub {
@@ -12,6 +16,43 @@ auto Trie::Get(std::string_view key) const -> const T * {
   // nullptr. After you find the node, you should use `dynamic_cast` to cast it to `const TrieNodeWithValue<T> *`. If
   // dynamic_cast returns `nullptr`, it means the type of the value is mismatched, and you should return nullptr.
   // Otherwise, return the value.
+
+  auto cur = root_;
+
+  for (char c : key) {
+    if (cur->children_.find(c) != cur->children_.end()) {
+      // find the path
+      cur = cur->children_.at(c);
+    } else {
+      return nullptr;
+    }
+  }
+  auto ret = dynamic_cast<const TrieNodeWithValue<T> *>(cur.get());
+  if (ret == nullptr) {
+    return nullptr;
+  }
+  return ret->value_.get();
+}
+
+// dfs for put function
+template <class T>
+std::shared_ptr<const TrieNode> PutDfs(const std::shared_ptr<const TrieNode> &root, std::string_view key, size_t index, 
+                                std::shared_ptr<T> value_p){
+  if (index == key.size()) {
+    return std::make_shared<TrieNodeWithValue<T>>(TrieNodeWithValue<T>(root->children_, value_p));
+  }
+
+  std::shared_ptr<const TrieNode> new_node;
+  auto new_root = root->Clone();
+
+  if (root->children_.find(key[index]) != root->children_.end()) {
+    new_node = PutDfs(root->children_.at(key[index]), key, index + 1, value_p);
+  } else {
+    new_node = PutDfs(std::make_shared<TrieNode>(TrieNode()), key, index + 1, value_p);
+  }
+
+  new_root->children_[key[index]] = new_node;
+  return std::make_shared<const TrieNode>(new_root);
 }
 
 template <class T>
@@ -21,6 +62,36 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
 
   // You should walk through the trie and create new nodes if necessary. If the node corresponding to the key already
   // exists, you should create a new `TrieNodeWithValue`.
+  std::shared_ptr<T> value_p = std::make_shared<T>(std::move(value));
+  auto root = PutDfs(root_, key, 0, value_p);
+  return Trie(root);
+}
+
+// dfs for remove function
+std::shared_ptr<const TrieNode> RemoveDfs(const std::shared_ptr<const TrieNode> &root, std::string_view key, size_t index) {
+  if (index == key.size()) {
+    if (root->children_.empty()) {
+      return nullptr;
+    }
+    return std::make_shared<TrieNode>(TrieNode(root->children_));
+  }
+
+  std::shared_ptr<const TrieNode> new_node;
+  if (root->children_.find(key[index]) != root->children_.end()) {
+    new_node = RemoveDfs(root->children_.at(key[index]), key, index + 1);
+    auto new_root = root->Clone();
+    if (new_node) {
+      new_root->children_[key[index]] = new_node;
+    } else {
+      new_root->children_.erase(key[index]);
+      // delete unnecessary node
+      if (!new_root->is_value_node_ && new_root->children_.empty()) {
+        return nullptr;
+      }
+    }
+    return new_root;
+  }
+  return root;
 }
 
 auto Trie::Remove(std::string_view key) const -> Trie {
@@ -28,6 +99,8 @@ auto Trie::Remove(std::string_view key) const -> Trie {
 
   // You should walk through the trie and remove nodes if necessary. If the node doesn't contain a value any more,
   // you should convert it to `TrieNode`. If a node doesn't have children any more, you should remove it.
+  auto root = RemoveDfs(root_, key, 0);
+  return Trie(root);
 }
 
 // Below are explicit instantiation of template functions.
