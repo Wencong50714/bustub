@@ -113,12 +113,14 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
   auto it = std::find(less_k_list_.begin(), less_k_list_.end(), frame_id);
   if (it != less_k_list_.end()) {
     less_k_list_.erase(it);
+    curr_size_--;
     return ;
   }
 
   it = std::find(more_k_list_.begin(), more_k_list_.end(), frame_id);
   if (it != more_k_list_.end()) {
     more_k_list_.erase(it);
+    curr_size_--;
   }
 }
 
