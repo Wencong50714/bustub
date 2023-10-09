@@ -188,10 +188,12 @@ class BufferPoolManager {
   std::unique_ptr<LRUKReplacer> replacer_;
   /** List of free frames that don't have any pages on them. */
   std::list<frame_id_t> free_list_;
+  /** book-keeping */
+  std::unordered_map<page_id_t, frame_id_t> page_table_;
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
   std::mutex latch_;
   /** Manager to manually update page */
-  DiskManager disk_manager_;
+  DiskManager *disk_manager_;
 
   /**
    * @brief Allocate a page on disk. Caller should acquire the latch before calling this function.
@@ -206,5 +208,7 @@ class BufferPoolManager {
   void DeallocatePage(__attribute__((unused)) page_id_t page_id) {
     // This is a no-nop right now without a more complex data structure to track deallocated pages
   }
+
+  auto AssignPage(frame_id_t fid, page_id_t pid);
 };
 }  // namespace bustub
