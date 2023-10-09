@@ -20,7 +20,10 @@ namespace bustub {
 
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
-    : pool_size_(pool_size), disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)), log_manager_(log_manager), disk_manager_(disk_manager) {
+    : pool_size_(pool_size),
+      disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)),
+      log_manager_(log_manager),
+      disk_manager_(disk_manager) {
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   replacer_ = std::make_unique<LRUKReplacer>(pool_size, replacer_k);
@@ -46,11 +49,11 @@ auto BufferPoolManager::AssignPage(frame_id_t fid, page_id_t pid) {
   return &pages_[fid];
 }
 
-void RemoveItemFromPageTable(std::unordered_map<frame_id_t , page_id_t> &m, frame_id_t fid) {
+void RemoveItemFromPageTable(std::unordered_map<frame_id_t, page_id_t> &m, frame_id_t fid) {
   for (auto it = m.begin(); it != m.end(); ++it) {
     if (it->second == fid) {
       m.erase(it);
-      return ;
+      return;
     }
   }
 }
@@ -70,7 +73,9 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     // If page is dirty, write back to the disk
     if (pages_[fid].IsDirty()) {
       auto promise = disk_scheduler_->CreatePromise();
+      auto f = promise.get_future();
       disk_scheduler_->Schedule({true, pages_[fid].GetData(), pages_[fid].GetPageId(), std::move(promise)});
+      f.get();
     }
     RemoveItemFromPageTable(page_table_, fid);
   }
@@ -87,7 +92,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   frame_id_t fid;
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
-  fid = it->second;
+    fid = it->second;
     pages_[fid].pin_count_ += 1;
     replacer_->RecordAccess(fid);
     replacer_->SetEvictable(fid, false);
@@ -102,7 +107,9 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
     }
     if (pages_[fid].IsDirty()) {
       auto promise = disk_scheduler_->CreatePromise();
+      auto f = promise.get_future();
       disk_scheduler_->Schedule({true, pages_[fid].GetData(), pages_[fid].GetPageId(), std::move(promise)});
+      f.get();
     }
     RemoveItemFromPageTable(page_table_, fid);
   }
@@ -139,8 +146,8 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   std::lock_guard<std::mutex> lock(latch_);
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
-
     disk_manager_->WritePage(page_id, pages_[it->second].GetData());
+    pages_[it->second].is_dirty_ = false;
     return true;
   }
   return false;
@@ -152,6 +159,7 @@ void BufferPoolManager::FlushAllPages() {
     auto pid = pages_[i].GetPageId();
     if (pid != INVALID_PAGE_ID) {
       disk_manager_->WritePage(pid, pages_[i].GetData());
+      pages_[i].is_dirty_ = false;
     }
   }
 }

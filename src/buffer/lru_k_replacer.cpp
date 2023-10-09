@@ -61,7 +61,6 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
 
   // if the frame is new, add to less list
   if (ks_[frame_id] == 0) {
-
     less_k_list_.emplace_back(frame_id);
   }
 
@@ -103,7 +102,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
   std::lock_guard<std::mutex> lock(latch_);
 
   if (ks_[frame_id] == 0) {
-    return ;
+    return;
   }
 
   ks_[frame_id] = 0;
@@ -113,7 +112,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
   if (it != less_k_list_.end()) {
     less_k_list_.erase(it);
     curr_size_--;
-    return ;
+    return;
   }
 
   it = std::find(more_k_list_.begin(), more_k_list_.end(), frame_id);

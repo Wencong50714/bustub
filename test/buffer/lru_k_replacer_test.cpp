@@ -32,36 +32,36 @@ TEST(MyTest0, K_is_1) {
   lru_replacer.SetEvictable(4, true);
   lru_replacer.SetEvictable(5, true);
   lru_replacer.SetEvictable(6, false);
-  ASSERT_EQ(5, lru_replacer.Size());      // [] [1,2,3,4,5,{6}]
+  ASSERT_EQ(5, lru_replacer.Size());  // [] [1,2,3,4,5,{6}]
 
   // TEST FOR THE ORDER OF LIST
-  lru_replacer.RecordAccess(1);   // [] [2,3,4,5,{6},1]
+  lru_replacer.RecordAccess(1);  // [] [2,3,4,5,{6},1]
 
   int value;
-  lru_replacer.Evict(&value);     // [] [3,4,5,{6},1]
+  lru_replacer.Evict(&value);  // [] [3,4,5,{6},1]
   ASSERT_EQ(2, value);
   ASSERT_EQ(4, lru_replacer.Size());
 
-  lru_replacer.Evict(&value);     // [] [4,5,{6},1]
+  lru_replacer.Evict(&value);  // [] [4,5,{6},1]
   ASSERT_EQ(3, value);
   ASSERT_EQ(3, lru_replacer.Size());
 
-  lru_replacer.Evict(&value);     // [] [5,{6},1]
+  lru_replacer.Evict(&value);  // [] [5,{6},1]
   ASSERT_EQ(4, value);
   ASSERT_EQ(2, lru_replacer.Size());
 
-  lru_replacer.Evict(&value);     // [] [{6},1]
+  lru_replacer.Evict(&value);  // [] [{6},1]
   ASSERT_EQ(5, value);
   ASSERT_EQ(1, lru_replacer.Size());
 
   lru_replacer.SetEvictable(6, true);
   ASSERT_EQ(2, lru_replacer.Size());
 
-  lru_replacer.Evict(&value);     // [] [1]
+  lru_replacer.Evict(&value);  // [] [1]
   ASSERT_EQ(6, value);
   ASSERT_EQ(1, lru_replacer.Size());
 
-  lru_replacer.Evict(&value);     // empty
+  lru_replacer.Evict(&value);  // empty
   ASSERT_EQ(1, value);
   ASSERT_EQ(0, lru_replacer.Size());
 }

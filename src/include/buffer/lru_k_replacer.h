@@ -128,7 +128,6 @@ class LRUKReplacer {
   auto Size() -> size_t;
 
  private:
-
   auto ScanList(std::list<frame_id_t> &l, frame_id_t *frame_id) -> bool;
 
   // Remove maybe_unused if you start using them.
