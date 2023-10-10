@@ -152,7 +152,10 @@ void BufferPoolManager::FlushAllPages() {
   for (frame_id_t i = 0; i < static_cast<int>(pool_size_); i++) {
     auto pid = pages_[i].GetPageId();
     if (pid != INVALID_PAGE_ID) {
-      disk_manager_->WritePage(pid, pages_[i].GetData());
+      auto promise = disk_scheduler_->CreatePromise();
+      auto f = promise.get_future();
+      disk_scheduler_->Schedule({true, pages_[i].GetData(), pages_[i].GetPageId(), std::move(promise)});
+      f.get();
       pages_[i].is_dirty_ = false;
     }
   }
@@ -168,6 +171,10 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   if (pages_[fid].pin_count_ > 0 && !replacer_->Evict(&fid)) {
     return false;
   }
+  auto promise = disk_scheduler_->CreatePromise();
+  auto f = promise.get_future();
+  disk_scheduler_->Schedule({true, pages_[fid].GetData(), pages_[fid].GetPageId(), std::move(promise)});
+  f.get();
   free_list_.emplace_back(static_cast<int>(fid));
   // reset page metadata
   pages_[fid].ResetMemory();

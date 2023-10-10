@@ -37,7 +37,7 @@ TEST(MyTest1, TestCString) {
   EXPECT_EQ(0, page_id_temp);
 
   // Scenario: Once we have a page, we should be able to read and write content.
-  std::string str ("Please split this sentence into tokens");
+  std::string str("Please split this sentence into tokens");
   strcpy(page0->GetData(), str.c_str());
   EXPECT_EQ(0, strcmp(page0->GetData(), "Please split this sentence into tokens"));
 
