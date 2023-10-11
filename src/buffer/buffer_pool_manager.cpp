@@ -21,9 +21,7 @@ namespace bustub {
 
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
-    : pool_size_(pool_size),
-      disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)),
-      log_manager_(log_manager) {
+    : pool_size_(pool_size), disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)), log_manager_(log_manager) {
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   replacer_ = std::make_unique<LRUKReplacer>(pool_size, replacer_k);
@@ -130,8 +128,8 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
 
   if (--pages_[fid].pin_count_ == 0) {
     replacer_->SetEvictable(fid, true);
-    pages_[fid].is_dirty_ |= is_dirty;
   }
+  pages_[fid].is_dirty_ |= is_dirty;
   return true;
 }
 
@@ -168,7 +166,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
     return true;
   }
   auto fid = it->second;
-  if (pages_[fid].pin_count_ > 0 ) {
+  if (pages_[fid].pin_count_ > 0) {
     return false;
   }
   page_table_.erase(page_id);
