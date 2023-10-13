@@ -37,6 +37,7 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   std::lock_guard<std::mutex> lock(latch_);
   frame_id_t fid;
+  bool d = false;
   // First, get page from free list
   if (!free_list_.empty()) {
     fid = free_list_.front();
@@ -47,26 +48,26 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     }
     // If page is dirty, write back to the disk
     if (pages_[fid].IsDirty()) {
+      d = true;
       auto promise = disk_scheduler_->CreatePromise();
-      auto f = promise.get_future();
+      write_future_ = promise.get_future();
       disk_scheduler_->Schedule({true, pages_[fid].GetData(), pages_[fid].GetPageId(), std::move(promise)});
-      f.get();
       pages_[fid].is_dirty_ = false;
-      pages_[fid].ResetMemory();
     }
     page_table_.erase(pages_[fid].GetPageId());
   }
-  // get new page_id
+  // update metadata between schedule request and I/O operation finished
   page_id_t pid = AllocatePage();
   *page_id = pid;
-
   page_table_[pid] = fid;
-
   pages_[fid].page_id_ = pid;
   pages_[fid].pin_count_ = 1;
-
   replacer_->RecordAccess(fid);
   replacer_->SetEvictable(fid, false);
+  if (d) {
+    write_future_.get();
+  }
+  pages_[fid].ResetMemory();
   return &pages_[fid];
 }
 
@@ -74,6 +75,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   std::lock_guard<std::mutex> lock(latch_);
   // First search for page_id in the buffer pool.
   frame_id_t fid;
+  bool d = false;
   auto it = page_table_.find(page_id);
   if (it != page_table_.end()) {
     fid = it->second;
@@ -90,27 +92,30 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       return nullptr;
     }
     if (pages_[fid].IsDirty()) {
+      d = true;
       auto promise = disk_scheduler_->CreatePromise();
-      auto f = promise.get_future();
+      write_future_ = promise.get_future();
       disk_scheduler_->Schedule({true, pages_[fid].GetData(), pages_[fid].GetPageId(), std::move(promise)});
-      f.get();
       pages_[fid].is_dirty_ = false;
     }
     page_table_.erase(pages_[fid].GetPageId());
-    pages_[fid].ResetMemory();
   }
-  page_table_[page_id] = fid;
-  // read the page from disk by scheduling a read DiskRequest with disk_scheduler_->Schedule()
-  pages_[fid].page_id_ = page_id;
-  pages_[fid].pin_count_ = 1;
+  if (d) {
+    write_future_.get();
+  }
 
   auto promise = disk_scheduler_->CreatePromise();
-  auto f = promise.get_future();
+  read_future_ = promise.get_future();
   disk_scheduler_->Schedule({false, pages_[fid].GetData(), page_id, std::move(promise)});
-  f.get();
-
+  // update metadata between schedule request and I/O operation finished
+  page_table_[page_id] = fid;
+  pages_[fid].page_id_ = page_id;
+  pages_[fid].pin_count_ = 1;
   replacer_->RecordAccess(fid);
   replacer_->SetEvictable(fid, false);
+
+  read_future_.get();
+
   return &pages_[fid];
 }
 

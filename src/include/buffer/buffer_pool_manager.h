@@ -192,6 +192,8 @@ class BufferPoolManager {
   std::unordered_map<page_id_t, frame_id_t> page_table_;
   /** This latch protects shared data structures. We recommend updating this comment to describe what it protects. */
   std::mutex latch_;
+  std::future<bool> write_future_;
+  std::future<bool> read_future_;
 
   /**
    * @brief Allocate a page on disk. Caller should acquire the latch before calling this function.
