@@ -44,6 +44,12 @@ TEST(PageGuardTest, SampleTest) {
 
   EXPECT_EQ(0, page0->GetPinCount());
 
+  {
+    auto *page2 = bpm->NewPage(&page_id_temp);
+    page2->RLatch();
+    auto guard2 = ReadPageGuard(bpm.get(), page2);
+  }
+
   // Shutdown the disk manager and remove the temporary file we created.
   disk_manager->ShutDown();
 }
@@ -68,7 +74,7 @@ TEST(PageGuardTest, BasicTest) {
   }
   // test ~BasicPageGuard()
   EXPECT_EQ(1, page0->GetPinCount());
-  
+
   // test BasicPageGuard::operator=(BasicPageGuard &&that)
   {
     auto basic_guard_1 = bpm->FetchPageBasic(page_id_temp);
@@ -79,7 +85,7 @@ TEST(PageGuardTest, BasicTest) {
     EXPECT_EQ(2, page0->GetPinCount());
   }
   EXPECT_EQ(1, page0->GetPinCount());
-  
+
   // test BasicPageGuard::Drop()
   {
     auto basic_guard_1 = bpm->FetchPageBasic(page_id_temp);
@@ -95,7 +101,7 @@ TEST(PageGuardTest, BasicTest) {
     EXPECT_EQ(2, page0->GetPinCount());
   }
   EXPECT_EQ(1, page0->GetPinCount());
-  
+
   // Shutdown the disk manager and remove the temporary file we created.
   disk_manager->ShutDown();
 }
@@ -265,7 +271,6 @@ TEST(PageGuardTest, upgradeTest) {
     auto basic_guard = bpm->FetchPageBasic(page_id_temp);
     EXPECT_EQ(2, page0->GetPinCount());
     auto upgraded_write_guard = basic_guard.UpgradeWrite();
-
   }
   EXPECT_EQ(1, page0->GetPinCount());
   // Shutdown the disk manager and remove the temporary file we created.

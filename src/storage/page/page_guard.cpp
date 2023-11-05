@@ -36,7 +36,7 @@ auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard
   return *this;
 }
 
-BasicPageGuard::~BasicPageGuard(){ Drop(); }
+BasicPageGuard::~BasicPageGuard() { Drop(); }
 auto BasicPageGuard::UpgradeRead() -> ReadPageGuard {
   auto read_guard = ReadPageGuard(this->bpm_, this->page_);
   this->page_->RLatch();

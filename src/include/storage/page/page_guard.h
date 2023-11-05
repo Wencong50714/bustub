@@ -72,7 +72,7 @@ class BasicPageGuard {
    */
   auto UpgradeRead() -> ReadPageGuard;
 
-  /** TODO(P2): Add implementation
+  /**
    *
    * @brief Upgrade a BasicPageGuard to a WritePageGuard
    *
