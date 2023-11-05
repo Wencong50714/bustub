@@ -3,13 +3,53 @@
 
 namespace bustub {
 
-BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {}
+BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
+  this->bpm_ = that.bpm_;
+  this->page_ = that.page_;
+  this->is_dirty_ = that.is_dirty_;
 
-void BasicPageGuard::Drop() {}
+  that.bpm_ = nullptr;
+  that.page_ = nullptr;
+  that.is_dirty_ = false;
+}
 
-auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & { return *this; }
+void BasicPageGuard::Drop() {
+  if (page_ != nullptr) {
+    // automatically unpinPage
+    bpm_->UnpinPage(page_->GetPageId(), is_dirty_);
+  }
+  this->page_ = nullptr;
+}
 
-BasicPageGuard::~BasicPageGuard(){};  // NOLINT
+auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & {
+  // check self assign
+  if (this != &that) {
+    // release the resource
+    this->Drop();
+
+    // transfer the resource of that to this
+    this->bpm_ = that.bpm_;
+    this->page_ = that.page_;
+    this->is_dirty_ = that.is_dirty_;
+
+    that.bpm_ = nullptr;
+    that.page_ = nullptr;
+    that.is_dirty_ = false;
+  }
+  return *this;
+}
+
+BasicPageGuard::~BasicPageGuard(){
+  if (page_ != nullptr) {
+    // automatically unpinPage
+    bpm_->UnpinPage(page_->GetPageId(), is_dirty_);
+  }
+
+  // initial the member field
+  this->bpm_ = nullptr;
+  this->page_ = nullptr;
+  this->is_dirty_ = false;
+};  // NOLINT
 
 ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept = default;
 
