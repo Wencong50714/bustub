@@ -5,6 +5,8 @@
 namespace bustub {
 
 class BufferPoolManager;
+class ReadPageGuard;
+class WritePageGuard;
 
 class BasicPageGuard {
  public:
@@ -58,6 +60,28 @@ class BasicPageGuard {
    * the page guard was dropped.
    */
   ~BasicPageGuard();
+
+  /**
+   *
+   * @brief Upgrade a BasicPageGuard to a ReadPageGuard
+   *
+   * The protected page is not evicted from the buffer pool during the upgrade,
+   * and the basic page guard should be made invalid after calling this function.
+   *
+   * @return an upgraded ReadPageGuard
+   */
+  auto UpgradeRead() -> ReadPageGuard;
+
+  /** TODO(P2): Add implementation
+   *
+   * @brief Upgrade a BasicPageGuard to a WritePageGuard
+   *
+   * The protected page is not evicted from the buffer pool during the upgrade,
+   * and the basic page guard should be made invalid after calling this function.
+   *
+   * @return an upgraded WritePageGuard
+   */
+  auto UpgradeWrite() -> WritePageGuard;
 
   auto PageId() -> page_id_t { return page_->GetPageId(); }
 

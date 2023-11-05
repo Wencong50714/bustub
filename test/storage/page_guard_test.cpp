@@ -242,4 +242,34 @@ TEST(PageGuardTest, HHTest) {
   disk_manager->ShutDown();
 }
 
+TEST(PageGuardTest, upgradeTest) {
+  const std::string db_name = "test.db";
+  const size_t buffer_pool_size = 5;
+  const size_t k = 2;
+
+  auto disk_manager = std::make_shared<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_shared<BufferPoolManager>(buffer_pool_size, disk_manager.get(), k);
+
+  page_id_t page_id_temp;
+  auto *page0 = bpm->NewPage(&page_id_temp);
+
+  {
+    auto basic_guard = bpm->FetchPageBasic(page_id_temp);
+    EXPECT_EQ(2, page0->GetPinCount());
+    auto upgraded_read_guard = basic_guard.UpgradeRead();
+    EXPECT_EQ(2, page0->GetPinCount());
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
+
+  {
+    auto basic_guard = bpm->FetchPageBasic(page_id_temp);
+    EXPECT_EQ(2, page0->GetPinCount());
+    auto upgraded_write_guard = basic_guard.UpgradeWrite();
+
+  }
+  EXPECT_EQ(1, page0->GetPinCount());
+  // Shutdown the disk manager and remove the temporary file we created.
+  disk_manager->ShutDown();
+}
+
 }  // namespace bustub
