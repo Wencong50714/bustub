@@ -25,7 +25,7 @@ void ExtendibleHTableDirectoryPage::Init(uint32_t max_depth) {
 
   global_depth_ = 0;
 
-  for (unsigned char & local_depth : local_depths_) {
+  for (uint8_t & local_depth : local_depths_) {
     local_depth = 0;
   }
 
