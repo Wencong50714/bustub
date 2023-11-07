@@ -25,12 +25,9 @@ void ExtendibleHTableDirectoryPage::Init(uint32_t max_depth) {
 
   global_depth_ = 0;
 
-  for (uint8_t & local_depth : local_depths_) {
-    local_depth = 0;
-  }
-
-  for (int & bucket_page_id : bucket_page_ids_) {
-    bucket_page_id = INVALID_PAGE_ID;
+  for (int i = 0; i < (1 << max_depth); i++) {
+    local_depths_[i] = 0;
+    bucket_page_ids_[i] = INVALID_PAGE_ID;
   }
 }
 
@@ -63,6 +60,13 @@ void ExtendibleHTableDirectoryPage::IncrGlobalDepth() {
   if (global_depth_ == GetMaxDepth()) {
     throw ExecutionException("Global depth greater than max depth");
   }
+
+  // duplicate
+  auto tmp = (1 << global_depth_);
+  for (int i = tmp; i < 2 * tmp; i++) {
+    local_depths_[i] = local_depths_[i - tmp];
+    bucket_page_ids_[i] = bucket_page_ids_[i - tmp];
+  }
   global_depth_++;
 }
 
@@ -70,6 +74,7 @@ void ExtendibleHTableDirectoryPage::DecrGlobalDepth() {
   if (global_depth_ == 0) {
     throw ExecutionException("Global depth less than 0");
   }
+  // TODO: Do the shrink operation
   global_depth_--;
 }
 
