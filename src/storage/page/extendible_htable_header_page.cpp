@@ -26,20 +26,20 @@ void ExtendibleHTableHeaderPage::Init(uint32_t max_depth) {
 
 auto ExtendibleHTableHeaderPage::HashToDirectoryIndex(uint32_t hash) const -> uint32_t {
   // get the first max_depth number of hash
-  auto move_bits = 32 - max_depth_;
-  return (hash >> move_bits);
+  uint32_t  mask = (1 << max_depth_) - 1;
+  return hash & (mask << (32 - max_depth_));
 }
 
 auto ExtendibleHTableHeaderPage::GetDirectoryPageId(uint32_t directory_idx) const -> uint32_t {
   if (directory_idx >= MaxSize()) {
-    throw ExecutionException("The index exceed the max size");
+    throw ExecutionException("Header: The index exceed the max size");
   }
   return directory_page_ids_[directory_idx];
 }
 
 void ExtendibleHTableHeaderPage::SetDirectoryPageId(uint32_t directory_idx, page_id_t directory_page_id) {
   if (directory_idx >= MaxSize()) {
-    throw ExecutionException("The index exceed the max size");
+    throw ExecutionException("Header: The index exceed the max size");
   }
   directory_page_ids_[directory_idx] = directory_page_id;
 }

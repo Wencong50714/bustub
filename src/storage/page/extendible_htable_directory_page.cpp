@@ -38,14 +38,14 @@ auto ExtendibleHTableDirectoryPage::HashToBucketIndex(uint32_t hash) const -> ui
 
 auto ExtendibleHTableDirectoryPage::GetBucketPageId(uint32_t bucket_idx) const -> page_id_t {
   if (bucket_idx >= (1 << GetMaxDepth())) {
-    throw ExecutionException("The index exceed the max size");
+    throw ExecutionException("Directory: The index exceed the max size");
   }
   return bucket_page_ids_[bucket_idx];
 }
 
 void ExtendibleHTableDirectoryPage::SetBucketPageId(uint32_t bucket_idx, page_id_t bucket_page_id) {
   if (bucket_idx >= (1 << GetMaxDepth())) {
-    throw ExecutionException("The index exceed the max size");
+    throw ExecutionException("Directory: The index exceed the max size");
   }
   bucket_page_ids_[bucket_idx] = bucket_page_id;
 }
@@ -58,7 +58,7 @@ auto ExtendibleHTableDirectoryPage::GetGlobalDepth() const -> uint32_t {
 
 void ExtendibleHTableDirectoryPage::IncrGlobalDepth() {
   if (global_depth_ == GetMaxDepth()) {
-    throw ExecutionException("Global depth greater than max depth");
+    throw ExecutionException("Directory: Global depth greater than max depth");
   }
 
   // duplicate
@@ -72,7 +72,7 @@ void ExtendibleHTableDirectoryPage::IncrGlobalDepth() {
 
 void ExtendibleHTableDirectoryPage::DecrGlobalDepth() {
   if (global_depth_ == 0) {
-    throw ExecutionException("Global depth less than 0");
+    throw ExecutionException("Directory: Global depth less than 0");
   }
   // TODO: Do the shrink operation
   global_depth_--;
@@ -97,21 +97,21 @@ auto ExtendibleHTableDirectoryPage::GetLocalDepth(uint32_t bucket_idx) const -> 
 
 void ExtendibleHTableDirectoryPage::SetLocalDepth(uint32_t bucket_idx, uint8_t local_depth) {
   if (local_depth > GetMaxDepth()) {
-    throw ExecutionException("Local depth greater than max depth");
+    throw ExecutionException("Directory: Local depth greater than max depth");
   }
   local_depths_[bucket_idx] = local_depth;
 }
 
 void ExtendibleHTableDirectoryPage::IncrLocalDepth(uint32_t bucket_idx) {
   if (local_depths_[bucket_idx] >= GetMaxDepth()) {
-    throw ExecutionException("Local depth greater than max depth");
+    throw ExecutionException("Directory: Local depth greater than max depth");
   }
   local_depths_[bucket_idx]++;
 }
 
 void ExtendibleHTableDirectoryPage::DecrLocalDepth(uint32_t bucket_idx) {
   if (local_depths_[bucket_idx] == 0) {
-    throw ExecutionException("Local depth Less than 0");
+    throw ExecutionException("Directory: Local depth Less than 0");
   }
   local_depths_[bucket_idx]--;
 }
