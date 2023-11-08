@@ -52,9 +52,7 @@ void ExtendibleHTableDirectoryPage::SetBucketPageId(uint32_t bucket_idx, page_id
 
 auto ExtendibleHTableDirectoryPage::GetSplitImageIndex(uint32_t bucket_idx) const -> uint32_t { return 0; }
 
-auto ExtendibleHTableDirectoryPage::GetGlobalDepth() const -> uint32_t {
-  return global_depth_;
-}
+auto ExtendibleHTableDirectoryPage::GetGlobalDepth() const -> uint32_t { return global_depth_; }
 
 void ExtendibleHTableDirectoryPage::IncrGlobalDepth() {
   if (global_depth_ == GetMaxDepth()) {
@@ -85,17 +83,11 @@ void ExtendibleHTableDirectoryPage::DecrGlobalDepth() {
 }
 
 auto ExtendibleHTableDirectoryPage::CanShrink() -> bool {
-  for (unsigned char & local_depth : local_depths_) {
-    if (local_depth == global_depth_) {
-      return false;
-    }
-  }
-  return true;
+  return std::all_of(local_depths_, local_depths_ + sizeof(local_depths_) / sizeof(local_depths_[0]),
+                     [this](unsigned char local_depth) { return local_depth != global_depth_; });
 }
 
-auto ExtendibleHTableDirectoryPage::Size() const -> uint32_t {
-  return 1 << global_depth_;
-}
+auto ExtendibleHTableDirectoryPage::Size() const -> uint32_t { return 1 << global_depth_; }
 
 auto ExtendibleHTableDirectoryPage::GetLocalDepth(uint32_t bucket_idx) const -> uint32_t {
   return local_depths_[bucket_idx];
@@ -122,16 +114,12 @@ void ExtendibleHTableDirectoryPage::DecrLocalDepth(uint32_t bucket_idx) {
   local_depths_[bucket_idx]--;
 }
 
-auto ExtendibleHTableDirectoryPage::GetGlobalDepthMask() const -> uint32_t {
-  return ((1 << global_depth_) - 1);
-}
+auto ExtendibleHTableDirectoryPage::GetGlobalDepthMask() const -> uint32_t { return ((1 << global_depth_) - 1); }
 
 auto ExtendibleHTableDirectoryPage::GetLocalDepthMask(uint32_t bucket_idx) const -> uint32_t {
   return ((1 << local_depths_[bucket_idx]) - 1);
 }
 
-auto ExtendibleHTableDirectoryPage::GetMaxDepth() const -> uint32_t {
-  return max_depth_;
-}
+auto ExtendibleHTableDirectoryPage::GetMaxDepth() const -> uint32_t { return max_depth_; }
 
 }  // namespace bustub

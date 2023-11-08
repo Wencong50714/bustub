@@ -128,7 +128,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
 
   if (bucket_page->IsFull()) {
     if (dir_page->GetLocalDepth(bucket_idx) == directory_max_depth_) {
-      return false; // can't split
+      return false;  // can't split
     }
 
     // Prepare the rehashing items
@@ -171,7 +171,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
         // remove from old page, and add it to new
         bucket_page->Remove(it.first, cmp_);
         new_bucket_page->Insert(it.first, it.second, cmp_);
-      } // Else, do nothing
+      }  // Else, do nothing
     }
     dir_guard.Drop();
   } else {
@@ -221,7 +221,9 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
   auto bucket_page = bpm_->FetchPageWrite(bucket_page_id).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
 
   bool ret = bucket_page->Remove(key, cmp_);
-  if (!ret) { return ret; }
+  if (!ret) {
+    return ret;
+  }
   // recursively merge page
   while (bucket_page->IsEmpty()) {
     auto local_depth = dir_page->GetLocalDepth(bucket_idx);

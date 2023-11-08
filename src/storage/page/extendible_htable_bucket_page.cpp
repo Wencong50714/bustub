@@ -22,7 +22,7 @@ template <typename K, typename V, typename KC>
 void ExtendibleHTableBucketPage<K, V, KC>::Init(uint32_t max_size) {
   size_ = 0;
 
-  max_size_ =  max_size;
+  max_size_ = max_size;
 
   for (uint32_t i = 0; i < max_size_; i++) {
     array_[i] = std::make_pair(K(), V());
@@ -48,12 +48,12 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
 
   for (uint32_t i = 0; i < size_; i++) {
     if (cmp(array_[i].first, key) == 0) {
-      return false; // the same key is already present
+      return false;  // the same key is already present
     }
   }
 
   array_[size_++] = std::make_pair(key, value);
-  return true; // array is full
+  return true;  // array is full
 }
 
 template <typename K, typename V, typename KC>
@@ -68,12 +68,11 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Remove(const K &key, const KC &cmp) -
       return true;
     }
   }
-  return false; // can't find the item
+  return false;  // can't find the item
 }
 
 template <typename K, typename V, typename KC>
-void ExtendibleHTableBucketPage<K, V, KC>::RemoveAt(uint32_t bucket_idx) {
-}
+void ExtendibleHTableBucketPage<K, V, KC>::RemoveAt(uint32_t bucket_idx) {}
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::KeyAt(uint32_t bucket_idx) const -> K {
