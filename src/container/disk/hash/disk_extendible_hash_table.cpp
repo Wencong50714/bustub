@@ -182,36 +182,77 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   return true;
 }
 
-template <typename K, typename V, typename KC>
-auto DiskExtendibleHashTable<K, V, KC>::InsertToNewDirectory(ExtendibleHTableHeaderPage *header, uint32_t directory_idx,
-                                                             uint32_t hash, const K &key, const V &value) -> bool {
-  return false;
-}
-
-template <typename K, typename V, typename KC>
-auto DiskExtendibleHashTable<K, V, KC>::InsertToNewBucket(ExtendibleHTableDirectoryPage *directory, uint32_t bucket_idx,
-                                                          const K &key, const V &value) -> bool {
-  return false;
-}
-
-template <typename K, typename V, typename KC>
-void DiskExtendibleHashTable<K, V, KC>::UpdateDirectoryMapping(ExtendibleHTableDirectoryPage *directory,
-                                                               uint32_t new_bucket_idx, page_id_t new_bucket_page_id,
-                                                               uint32_t new_local_depth, uint32_t local_depth_mask) {
-  throw NotImplementedException("DiskExtendibleHashTable is not implemented");
-}
-
-template <typename K, typename V, typename KC>
-void DiskExtendibleHashTable<K, V, KC>::MigrateEntries(ExtendibleHTableBucketPage<K, V, KC> *old_bucket,
-                                                       ExtendibleHTableBucketPage<K, V, KC> *new_bucket,
-                                                       uint32_t new_bucket_idx, uint32_t local_depth_mask) {}
-
 /*****************************************************************************
  * REMOVE
  *****************************************************************************/
 template <typename K, typename V, typename KC>
 auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transaction) -> bool {
-  return false;
+  uint32_t hash = Hash(key);
+  auto header_page = bpm_->FetchPageBasic(header_page_id_).template AsMut<ExtendibleHTableHeaderPage>();
+  auto dir_idx = header_page->HashToDirectoryIndex(hash);
+  auto dir_page_id = static_cast<page_id_t>(header_page->GetDirectoryPageId(dir_idx));
+
+  // If the page have not been allocated, create a new page and place back
+  if (dir_page_id == INVALID_PAGE_ID) {
+    auto dir_guard = bpm_->NewPageGuarded(&dir_page_id);
+    auto dir_page = dir_guard.template AsMut<ExtendibleHTableDirectoryPage>();
+    dir_page->Init(directory_max_depth_);
+
+    header_page->SetDirectoryPageId(dir_idx, dir_page_id);
+  }
+
+  auto dir_page = bpm_->FetchPageBasic(dir_page_id).template AsMut<ExtendibleHTableDirectoryPage>();
+  auto bucket_idx = dir_page->HashToBucketIndex(hash);
+  auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
+
+  // If the page have not been allocated, create a new page and place back
+  if (bucket_page_id == INVALID_PAGE_ID) {
+    auto bucket_guard = bpm_->NewPageGuarded(&bucket_page_id);
+    auto bucket_page = bucket_guard.template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+    bucket_page->Init(bucket_max_size_);
+
+    dir_page->SetBucketPageId(bucket_idx, bucket_page_id);
+  }
+
+  auto bucket_page = bpm_->FetchPageBasic(bucket_page_id).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+
+  bool ret = bucket_page->Remove(key, cmp_);
+  if (!ret) { return ret; }
+  // recursively merge page
+  while (bucket_page->IsEmpty()) {
+    auto local_depth = dir_page->GetLocalDepth(bucket_idx);
+    if (local_depth == 0) {
+      return true;
+    }
+
+    // Get target pages
+    auto target_mask = (1 << (local_depth - 1)) - 1;
+    auto target_idx = bucket_idx & target_mask;
+    auto target_page_idx = dir_page->GetBucketPageId(target_idx);
+
+    // Decrease target pages
+    auto step = (1 << dir_page->GetLocalDepth(target_idx));
+    for (uint32_t i = target_idx; i < (1 << dir_page->GetGlobalDepth()); i += step) {
+      dir_page->DecrLocalDepth(i);
+    }
+
+    auto local_mask = dir_page->GetLocalDepthMask(bucket_idx);
+    auto suffix = bucket_idx & local_mask;
+    step = (1 << dir_page->GetLocalDepth(bucket_idx));
+    for (uint32_t i = suffix; i < (1 << dir_page->GetGlobalDepth()); i += step) {
+      dir_page->DecrLocalDepth(i);
+      // merge into target page
+      dir_page->SetBucketPageId(i, target_page_idx);
+    }
+
+    if (dir_page->CanShrink()) {
+      dir_page->DecrGlobalDepth();
+    }
+
+    bucket_page = bpm_->FetchPageBasic(target_page_idx).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+    bucket_idx = target_idx;
+  }
+  return true;
 }
 
 template class DiskExtendibleHashTable<int, int, IntComparator>;

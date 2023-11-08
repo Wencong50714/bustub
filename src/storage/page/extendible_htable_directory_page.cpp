@@ -74,7 +74,13 @@ void ExtendibleHTableDirectoryPage::DecrGlobalDepth() {
   if (global_depth_ == 0) {
     throw ExecutionException("Directory: Global depth less than 0");
   }
-  // TODO: Do the shrink operation
+
+  // re-init
+  auto tmp = (1 << global_depth_);
+  for (int i = tmp / 2; i < tmp; i++) {
+    local_depths_[i] = 0;
+    bucket_page_ids_[i] = INVALID_PAGE_ID;
+  }
   global_depth_--;
 }
 
