@@ -83,7 +83,7 @@ void ExtendibleHTableDirectoryPage::DecrGlobalDepth() {
 }
 
 auto ExtendibleHTableDirectoryPage::CanShrink() -> bool {
-  return std::all_of(local_depths_, local_depths_ + sizeof(local_depths_) / sizeof(local_depths_[0]),
+  return std::all_of(local_depths_, local_depths_ + (1 << global_depth_),
                      [this](unsigned char local_depth) { return local_depth != global_depth_; });
 }
 

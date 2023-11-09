@@ -126,6 +126,10 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
 
   auto bucket_page = bpm_->FetchPageWrite(bucket_page_id).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
 
+  V val;
+  if (bucket_page->Lookup(key, val, cmp_)) {
+    return false;  // key already in the bucket
+  }
   if (bucket_page->IsFull()) {
     if (dir_page->GetLocalDepth(bucket_idx) == directory_max_depth_) {
       return false;  // can't split
@@ -225,7 +229,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
     return ret;
   }
   // recursively merge page
-  while (bucket_page->IsEmpty()) {
+  if (bucket_page->IsEmpty()) {
     auto local_depth = dir_page->GetLocalDepth(bucket_idx);
     if (local_depth == 0) {
       return true;

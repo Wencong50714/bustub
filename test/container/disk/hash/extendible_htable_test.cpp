@@ -156,4 +156,36 @@ TEST(ExtendibleHTableTest, RemoveTest1) {
   ht.VerifyIntegrity();
 }
 
+TEST(ExtendibleHTableTest, InsertSameKey) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 3, 2);
+
+  int num_keys = 5;
+
+  // insert some values
+  for (int i = 0; i < num_keys; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+
+  ht.VerifyIntegrity();
+
+  for (int i = 0; i < num_keys; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_FALSE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+
+  ht.VerifyIntegrity();
+}
+
 }  // namespace bustub
