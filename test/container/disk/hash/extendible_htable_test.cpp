@@ -188,4 +188,80 @@ TEST(ExtendibleHTableTest, InsertSameKey) {
   ht.VerifyIntegrity();
 }
 
+TEST(ExtendibleHTableTest, GrowShrinkTest1) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 3, 2);
+
+  int num_keys = 5;
+
+  // insert some values
+  for (int i = 0; i < num_keys; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+
+  ht.VerifyIntegrity();
+
+  ht.Remove(2);
+  ht.PrintHT();
+
+  ht.Remove(0);
+  ht.Remove(4);
+  ht.PrintHT();
+}
+
+TEST(ExtendibleHTableTest, GrowShrinkTest2) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 3, 2);
+
+  int num_keys = 5;
+
+  // insert some values
+  for (int i = 0; i < num_keys; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+
+  ht.VerifyIntegrity();
+
+  ht.Remove(0);
+  ht.Remove(4);
+  ht.PrintHT();
+
+  ht.VerifyIntegrity();
+}
+
+TEST(ExtendibleHTableTest, GrowShrinkTest3) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 4, 2);
+
+  ht.Insert(0, 0);
+  ht.Insert(2, 0);
+
+  bool inserted = ht.Insert(1, 1);
+
+  ASSERT_TRUE(inserted);
+  std::vector<int> res;
+  ht.GetValue(1, &res);
+  ASSERT_EQ(1, res.size());
+  ASSERT_EQ(1, res[0]);
+
+  ht.VerifyIntegrity();
+  ht.PrintHT();
+}
+
 }  // namespace bustub
