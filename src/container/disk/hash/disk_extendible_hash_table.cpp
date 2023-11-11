@@ -204,11 +204,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
 
   // If the page have not been allocated, create a new page and place back
   if (dir_page_id == INVALID_PAGE_ID) {
-    auto dir_guard = bpm_->NewPageGuarded(&dir_page_id).UpgradeWrite();
-    auto dir_page = dir_guard.template AsMut<ExtendibleHTableDirectoryPage>();
-    dir_page->Init(directory_max_depth_);
-
-    header_page->SetDirectoryPageId(dir_idx, dir_page_id);
+    return false;
   }
 
   header_guard.Drop();
@@ -219,11 +215,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
 
   // If the page have not been allocated, create a new page and place back
   if (bucket_page_id == INVALID_PAGE_ID) {
-    auto bucket_guard = bpm_->NewPageGuarded(&bucket_page_id).UpgradeWrite();
-    auto bucket_page = bucket_guard.template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
-    bucket_page->Init(bucket_max_size_);
-
-    dir_page->SetBucketPageId(bucket_idx, bucket_page_id);
+    return false;
   }
 
   auto bucket_page = bpm_->FetchPageWrite(bucket_page_id).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
@@ -232,10 +224,10 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
   if (!ret) {
     return ret;
   }
-  // recursively merge page
-  if (bucket_page->IsEmpty()) {
+
+  while (bucket_page->IsEmpty()) {
     auto local_depth = dir_page->GetLocalDepth(bucket_idx);
-    if (local_depth == 0) {
+    if (local_depth == 0) { // only this bucket
       return true;
     }
 
@@ -246,8 +238,12 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
       target_idx += (1 << (local_depth - 1));
     }
     auto target_page_idx = dir_page->GetBucketPageId(target_idx);
+    auto target_depth = dir_page->GetLocalDepth(target_idx);
+    if (target_depth != local_depth || target_page_idx == dir_page->GetBucketPageId(bucket_idx)) {
+      return true;  // can't merge, leave it to empty
+    }
 
-    // Decrease target pages
+    // Increase target pages
     auto step = (1 << dir_page->GetLocalDepth(target_idx));
     for (uint32_t i = target_idx; i < (1 << dir_page->GetGlobalDepth()); i += step) {
       dir_page->DecrLocalDepth(i);
@@ -266,7 +262,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
       dir_page->DecrGlobalDepth();
     }
 
-    dir_guard.Drop();
+    bucket_page = bpm_->FetchPageWrite(target_page_idx).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+    bucket_idx = target_idx;
   }
   return true;
 }

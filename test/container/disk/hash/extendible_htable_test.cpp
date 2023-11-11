@@ -264,4 +264,83 @@ TEST(ExtendibleHTableTest, GrowShrinkTest3) {
   ht.PrintHT();
 }
 
+/**
+ * This case, should keep the bucket0 and bucket2 to empty
+ */
+TEST(ExtendibleHTableTest, RecursiveMerge1) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 4, 2);
+
+  ht.Insert(0, 0);
+  ht.Insert(1, 1);
+  ht.Insert(2, 2);
+  ht.Insert(3, 3);
+  ht.Insert(5, 5);
+
+  ht.PrintHT();
+
+  ht.Remove(0);
+  ht.Remove(2);
+
+  ht.VerifyIntegrity();
+  ht.PrintHT();
+}
+
+/**
+ * Should also keep bucket empty, do nothing
+ */
+TEST(ExtendibleHTableTest, RecursiveMerge2) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 4, 2);
+
+  for (int i = 0; i < 4; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+
+  ht.Insert(4, 4);
+  ht.Insert(5, 5);
+  ht.Insert(9, 9);
+  ht.PrintHT();
+  ht.VerifyIntegrity();
+
+  ht.Remove(2);
+  ht.Remove(3);
+  ht.VerifyIntegrity();
+}
+
+TEST(ExtendibleHTableTest, RecursiveMerge3) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 4, 2);
+
+  for (int i = 0; i < 4; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+
+  ht.Insert(4, 4);
+  ht.Insert(7, 7);
+  ht.Insert(11, 11);
+
+  ht.VerifyIntegrity();
+  ht.Remove(2);
+  ht.Remove(1);
+
+  ht.VerifyIntegrity();
+}
+
 }  // namespace bustub
