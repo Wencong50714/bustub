@@ -90,6 +90,20 @@ TEST(ExtendibleHTableTest, InsertTest2) {
   ht.VerifyIntegrity();
 }
 
+TEST(ExtendibleHTableTest, InsertTest3) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 3, 2);
+
+  ht.Insert(0, 0);
+  ht.Insert(4, 4);
+  ht.Insert(8, 8);
+
+  ht.VerifyIntegrity();
+  ht.PrintHT();
+}
+
 // NOLINTNEXTLINE
 TEST(ExtendibleHTableTest, RemoveTest1) {
   auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
@@ -340,6 +354,55 @@ TEST(ExtendibleHTableTest, RecursiveMerge3) {
   ht.Remove(2);
   ht.Remove(1);
 
+  ht.VerifyIntegrity();
+}
+
+/**
+ * After remove 3, the directory's global size should be 0
+ */
+TEST(ExtendibleHTableTest, RecursiveMerge4) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 4, 2);
+
+  ht.Insert(0, 0);
+  ht.Insert(1, 1);
+  ht.Insert(2, 2);
+  ht.Insert(3, 3);
+  ht.Insert(5, 5);
+
+  ht.PrintHT();
+
+  ht.Remove(0);
+  ht.Remove(2);
+  ht.Remove(3);
+  ht.PrintHT();
+  ht.VerifyIntegrity();
+
+  ht.Insert(0, 0);
+  ht.PrintHT();
+  ht.VerifyIntegrity();
+}
+
+/**
+ * Here dir_page also should have 0 global depth
+ */
+TEST(ExtendibleHTableTest, RecursiveMerge5) {
+  auto disk_mgr = std::make_unique<DiskManagerUnlimitedMemory>();
+  auto bpm = std::make_unique<BufferPoolManager>(50, disk_mgr.get());
+
+  DiskExtendibleHashTable<int, int, IntComparator> ht("blah", bpm.get(), IntComparator(), HashFunction<int>(), 2, 4, 2);
+
+  for (int i = 0; i < 5; i++) {
+    ht.Insert(i, i);
+  }
+
+  ht.Remove(1);
+  ht.Remove(3);
+  ht.Remove(2);
+
+  ht.PrintHT();
   ht.VerifyIntegrity();
 }
 
