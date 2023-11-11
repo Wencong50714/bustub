@@ -66,8 +66,8 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   }
 
   auto dir_guard = bpm_->FetchPageRead(dir_page_id);
-  header_guard.Drop();
   auto dir_page = dir_guard.template As<ExtendibleHTableDirectoryPage>();
+  header_guard.Drop();
   auto bucket_idx = dir_page->HashToBucketIndex(hash);
   auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
 
@@ -76,7 +76,8 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
     return false;
   }
 
-  auto bucket_page = bpm_->FetchPageRead(bucket_page_id).template As<ExtendibleHTableBucketPage<K, V, KC>>();
+  auto bucket_guard = bpm_->FetchPageRead(bucket_page_id);
+  auto bucket_page = bucket_guard.template As<ExtendibleHTableBucketPage<K, V, KC>>();
   dir_guard.Drop();
 
   V value;
@@ -110,8 +111,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   }
 
   auto dir_guard = bpm_->FetchPageWrite(dir_page_id);
-  header_guard.Drop();
   auto dir_page = dir_guard.template AsMut<ExtendibleHTableDirectoryPage>();
+  header_guard.Drop();
   auto bucket_idx = dir_page->HashToBucketIndex(hash);
   auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
 
@@ -208,8 +209,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
   }
 
   auto dir_guard = bpm_->FetchPageWrite(dir_page_id);
-  header_guard.Drop();
   auto dir_page = dir_guard.template AsMut<ExtendibleHTableDirectoryPage>();
+  header_guard.Drop();
   auto bucket_idx = dir_page->HashToBucketIndex(hash);
   auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
 
