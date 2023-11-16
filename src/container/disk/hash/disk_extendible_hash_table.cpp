@@ -59,7 +59,7 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   auto header_page = header_guard.template As<ExtendibleHTableHeaderPage>();
   auto dir_idx = header_page->HashToDirectoryIndex(hash);
   auto dir_page_id = static_cast<page_id_t>(header_page->GetDirectoryPageId(dir_idx));
-
+  header_guard.Drop();
   // If the page have not been allocated, create a new page and place back
   if (dir_page_id == INVALID_PAGE_ID) {
     return false;
@@ -67,9 +67,9 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
 
   auto dir_guard = bpm_->FetchPageRead(dir_page_id);
   auto dir_page = dir_guard.template As<ExtendibleHTableDirectoryPage>();
-  header_guard.Drop();
   auto bucket_idx = dir_page->HashToBucketIndex(hash);
   auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
+  dir_guard.Drop();
 
   // If the page have not been allocated, create a new page and place back
   if (bucket_page_id == INVALID_PAGE_ID) {
@@ -78,7 +78,6 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
 
   auto bucket_guard = bpm_->FetchPageRead(bucket_page_id);
   auto bucket_page = bucket_guard.template As<ExtendibleHTableBucketPage<K, V, KC>>();
-  dir_guard.Drop();
 
   V value;
   if (bucket_page->Lookup(key, value, cmp_)) {
@@ -110,9 +109,9 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     header_page->SetDirectoryPageId(dir_idx, dir_page_id);
   }
 
+  header_guard.Drop();
   auto dir_guard = bpm_->FetchPageWrite(dir_page_id);
   auto dir_page = dir_guard.template AsMut<ExtendibleHTableDirectoryPage>();
-  header_guard.Drop();
   auto bucket_idx = dir_page->HashToBucketIndex(hash);
   auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
 
@@ -198,11 +197,11 @@ template <typename K, typename V, typename KC>
 auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transaction) -> bool {
   uint32_t hash = Hash(key);
 
-  auto header_guard = bpm_->FetchPageWrite(header_page_id_);
-  auto header_page = header_guard.template AsMut<ExtendibleHTableHeaderPage>();
+  auto header_guard = bpm_->FetchPageRead(header_page_id_);
+  auto header_page = header_guard.template As<ExtendibleHTableHeaderPage>();
   auto dir_idx = header_page->HashToDirectoryIndex(hash);
   auto dir_page_id = static_cast<page_id_t>(header_page->GetDirectoryPageId(dir_idx));
-
+  header_guard.Drop();
   // If the page have not been allocated, create a new page and place back
   if (dir_page_id == INVALID_PAGE_ID) {
     return false;
@@ -210,7 +209,6 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
 
   auto dir_guard = bpm_->FetchPageWrite(dir_page_id);
   auto dir_page = dir_guard.template AsMut<ExtendibleHTableDirectoryPage>();
-  header_guard.Drop();
   auto bucket_idx = dir_page->HashToBucketIndex(hash);
   auto bucket_page_id = static_cast<page_id_t>(dir_page->GetBucketPageId(bucket_idx));
 
