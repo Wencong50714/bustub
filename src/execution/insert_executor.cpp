@@ -32,15 +32,15 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     return false;
   }
 
-  Tuple child_tuple{};
+  Tuple to_insert_tuple{};
   int cnt = 0;
-  while(child_executor_->Next(&child_tuple, rid)) {
+  while(child_executor_->Next(&to_insert_tuple, rid)) {
     TupleMeta meta{INVALID_TXN_ID, false}; // may need assign value
-    auto inserted_rid = table_info_->table_->InsertTuple(meta, child_tuple);
+    auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(), exec_ctx_->GetTransaction(), plan_->table_oid_);
 
     for (auto index : table_indexes_) {
-      auto key_tuple = child_tuple.KeyFromTuple(GetOutputSchema(), index->key_schema_, index->index_->GetKeyAttrs());
-      index->index_->InsertEntry(key_tuple, inserted_rid.value(), exec_ctx_->GetTransaction());
+      index->index_->InsertEntry(to_insert_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()),
+                           *new_rid, exec_ctx_->GetTransaction());
     }
     cnt++;
   }

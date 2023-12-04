@@ -22,22 +22,34 @@ void SeqScanExecutor::Init() {
 }
 
 bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
-  // Loop until a valid tuple is found or end of table is reached
   while (!table_iter_->IsEnd()) {
     auto [metadata, tuple_data] = table_iter_->GetTuple();
 
-    // If the tuple is not deleted, set the output tuple and RID, then return true
+    // Check for non-deleted tuples
     if (!metadata.is_deleted_) {
-      *tuple = Tuple(tuple_data);
-      *rid = table_iter_->GetRID();
-      ++(*table_iter_);
-      return true;
+      bool isValidTuple = false;
+
+      // If seq scan node have predicate, should filter
+      if (plan_->filter_predicate_ != nullptr) {
+        auto value = plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema());
+        isValidTuple = !value.IsNull() && value.GetAs<bool>();
+      } else {
+        isValidTuple = true;
+      }
+
+      if (isValidTuple) {
+        *tuple = Tuple(tuple_data);
+        *rid = table_iter_->GetRID();
+        ++(*table_iter_);
+        return true;
+      }
     }
 
     ++(*table_iter_);
   }
   return false;
 }
+
 
 
 }  // namespace bustub

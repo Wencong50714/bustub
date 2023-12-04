@@ -51,11 +51,13 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
     auto to_update_tuple = Tuple{values, &child_executor_->GetOutputSchema()};
     TupleMeta metadata{INVALID_TXN_ID, false}; // may need assign value
-    auto inserted_rid = table_info_->table_->InsertTuple(metadata, to_update_tuple);
+    auto new_rid = table_info_->table_->InsertTuple(metadata, to_update_tuple, exec_ctx_->GetLockManager(), exec_ctx_->GetTransaction(), plan_->table_oid_);
 
     for (auto index : table_indexes_) {
-      auto key_tuple = to_update_tuple.KeyFromTuple(GetOutputSchema(), index->key_schema_, index->index_->GetKeyAttrs());
-      index->index_->InsertEntry(key_tuple, inserted_rid.value(), exec_ctx_->GetTransaction());
+      index->index_->DeleteEntry(child_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_,index->index_->GetKeyAttrs()),
+                                 *rid, exec_ctx_->GetTransaction());
+      index->index_->InsertEntry(to_update_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()),
+                                 *new_rid, exec_ctx_->GetTransaction());
     }
     cnt++;
   }

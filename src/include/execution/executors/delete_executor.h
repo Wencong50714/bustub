@@ -64,6 +64,7 @@ class DeleteExecutor : public AbstractExecutor {
 
   /** Metadata identifying the table that should be updated */
   const TableInfo *table_info_;
+  std::vector<IndexInfo *> table_indexes_;
 
   bool is_end_;
 };
