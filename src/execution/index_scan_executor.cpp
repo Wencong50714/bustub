@@ -31,8 +31,9 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
   while (rid_iter_ != rids_.end()) {
     auto [metadata, tuple_data] = table_info->table_->GetTuple(*rid_iter_);
+    auto value = plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema());
 
-    if (!metadata.is_deleted_) {
+    if (!metadata.is_deleted_ && !value.IsNull() && value.GetAs<bool>()) {
       *tuple = Tuple(tuple_data);
       *rid = *rid_iter_;
       ++rid_iter_;

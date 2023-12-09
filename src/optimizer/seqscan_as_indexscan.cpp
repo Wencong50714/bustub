@@ -32,6 +32,7 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
     auto column_idx = cv_expr->GetColIdx();
     for (const auto *index : indices) {
       const auto &columns = index->key_schema_.GetColumns();
+
       for (const auto& column : columns) {
         if (column.GetName() == table_info->schema_.GetColumn(column_idx).GetName()) {
           const auto const_expr = dynamic_cast<ConstantValueExpression *>(seq_scan.filter_predicate_.get()->children_[1].get());
