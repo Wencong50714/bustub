@@ -34,15 +34,16 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   Tuple child_tuple{};
   int cnt = 0;
-  while(child_executor_->Next(&child_tuple, rid)) {
+  while (child_executor_->Next(&child_tuple, rid)) {
     // delete
     TupleMeta meta = table_info_->table_->GetTupleMeta(*rid);
     meta.is_deleted_ = true;
     table_info_->table_->UpdateTupleMeta(meta, *rid);
 
     for (auto index : table_indexes_) {
-      index->index_->DeleteEntry(child_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_,index->index_->GetKeyAttrs()),
-                                 *rid, exec_ctx_->GetTransaction());
+      index->index_->DeleteEntry(
+          child_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()), *rid,
+          exec_ctx_->GetTransaction());
     }
     cnt++;
   }

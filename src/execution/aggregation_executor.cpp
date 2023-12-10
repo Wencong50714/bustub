@@ -18,7 +18,8 @@ namespace bustub {
 
 AggregationExecutor::AggregationExecutor(ExecutorContext *exec_ctx, const AggregationPlanNode *plan,
                                          std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan),
+    : AbstractExecutor(exec_ctx),
+      plan_(plan),
       child_executor_(std::move(child_executor)),
       aht_(SimpleAggregationHashTable(plan_->GetAggregates(), plan_->agg_types_)),
       aht_iterator_(aht_.Begin()) {}

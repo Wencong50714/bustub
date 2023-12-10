@@ -14,14 +14,15 @@
 
 namespace bustub {
 
-SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan) : AbstractExecutor(exec_ctx), plan_(plan) {}
+SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
+    : AbstractExecutor(exec_ctx), plan_(plan) {}
 
 void SeqScanExecutor::Init() {
   auto table_info = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
   table_iter_ = std::make_unique<TableIterator>(table_info->table_->MakeIterator());
 }
 
-bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
+auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   while (!table_iter_->IsEnd()) {
     auto [metadata, tuple_data] = table_iter_->GetTuple();
 
@@ -49,7 +50,5 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
   }
   return false;
 }
-
-
 
 }  // namespace bustub

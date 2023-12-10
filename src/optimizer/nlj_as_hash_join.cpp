@@ -20,7 +20,7 @@ namespace bustub {
 
 auto RecursivePredicate(AbstractExpression *expr, std::vector<AbstractExpressionRef> *left_key_expr,
                         std::vector<AbstractExpressionRef> *right_key_expr) -> bool {
-  const auto &cmp_expr = dynamic_cast<const ComparisonExpression*>(expr);
+  const auto &cmp_expr = dynamic_cast<const ComparisonExpression *>(expr);
 
   if (cmp_expr != nullptr && cmp_expr->comp_type_ == ComparisonType::Equal) {
     BUSTUB_ASSERT(cmp_expr->GetChildren().size() == 2, "Cmp expr must have 2 children\n");
@@ -39,14 +39,14 @@ auto RecursivePredicate(AbstractExpression *expr, std::vector<AbstractExpression
     return true;
   }
 
-  const auto &logic_expr = dynamic_cast<const LogicExpression*>(expr);
+  const auto &logic_expr = dynamic_cast<const LogicExpression *>(expr);
   if (logic_expr == nullptr || logic_expr->logic_type_ != LogicType::And) {
     return false;
   }
 
   BUSTUB_ASSERT(logic_expr->GetChildren().size() == 2, "Logic expr must have 2 children\n");
-  return RecursivePredicate(logic_expr->GetChildAt(0).get(), left_key_expr, right_key_expr)
-      && RecursivePredicate(logic_expr->GetChildAt(1).get(), left_key_expr, right_key_expr);
+  return RecursivePredicate(logic_expr->GetChildAt(0).get(), left_key_expr, right_key_expr) &&
+         RecursivePredicate(logic_expr->GetChildAt(1).get(), left_key_expr, right_key_expr);
 }
 
 auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef {
@@ -74,7 +74,7 @@ auto Optimizer::OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> Abstra
     }
 
     return std::make_shared<HashJoinPlanNode>(nlj_plan.output_schema_, nlj_plan.GetLeftPlan(), nlj_plan.GetRightPlan(),
-                            left_key_expressions, right_key_expressions, nlj_plan.GetJoinType());
+                                              left_key_expressions, right_key_expressions, nlj_plan.GetJoinType());
   }
   return optimized_plan;
 }

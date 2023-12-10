@@ -33,9 +33,10 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
     for (const auto *index : indices) {
       const auto &columns = index->key_schema_.GetColumns();
 
-      for (const auto& column : columns) {
+      for (const auto &column : columns) {
         if (column.GetName() == table_info->schema_.GetColumn(column_idx).GetName()) {
-          const auto const_expr = dynamic_cast<ConstantValueExpression *>(seq_scan.filter_predicate_.get()->children_[1].get());
+          const auto const_expr =
+              dynamic_cast<ConstantValueExpression *>(seq_scan.filter_predicate_.get()->children_[1].get());
           return std::make_shared<IndexScanPlanNode>(optimized_plan->output_schema_, table_info->oid_,
                                                      index->index_oid_, seq_scan.filter_predicate_, const_expr);
         }

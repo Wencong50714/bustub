@@ -57,6 +57,6 @@ class SortExecutor : public AbstractExecutor {
 
   std::vector<Tuple> tuples_{};
 
-  size_t it_{}; // tuples iterator
+  size_t it_{};  // tuples iterator
 };
 }  // namespace bustub

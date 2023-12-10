@@ -36,16 +36,24 @@ void HashJoinExecutor::Init() {
 
   // Build hash table by right key
   while (right_child_->Next(&child_tuple, &rid)) {
-    HJKey keys = MakeHJKey(&child_tuple, false);
-    hj_table_[keys].push_back(child_tuple);
+    hash_t hk{};
+    for (const auto &expr : plan_->RightJoinKeyExpressions()) {
+      auto value = expr->Evaluate(&child_tuple, right_child_->GetOutputSchema());
+      hk = HashUtil::CombineHashes(hk, HashUtil::HashValue(&value));
+    }
+    hj_table_[hk].push_back(child_tuple);
   }
 
   while (left_child_->Next(&child_tuple, &rid)) {
-    HJKey keys = MakeHJKey(&child_tuple, true);
+    hash_t hk{};
+    for (const auto &expr : plan_->LeftJoinKeyExpressions()) {
+      auto value = expr->Evaluate(&child_tuple, left_child_->GetOutputSchema());
+      hk = HashUtil::CombineHashes(hk, HashUtil::HashValue(&value));
+    }
 
     bool is_joined = false;
-    if (hj_table_.find(keys) != hj_table_.end()) {
-      for (const auto &right_tuple : hj_table_[keys]) {
+    if (hj_table_.find(hk) != hj_table_.end()) {
+      for (const auto &right_tuple : hj_table_[hk]) {
         if (IsEqui(&child_tuple, &right_tuple)) {
           is_joined = true;
           auto values = CombineTwoTuples(&child_tuple, &right_tuple);

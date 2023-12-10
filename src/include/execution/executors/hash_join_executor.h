@@ -54,21 +54,6 @@ class HashJoinExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
  private:
-  /** @return The tuple as an HJKey */
-  auto MakeHJKey(const Tuple *tuple, bool is_left) -> HJKey {
-    std::vector<Value> keys;
-    if (is_left) {
-      for (const auto &expr : plan_->LeftJoinKeyExpressions()) {
-        keys.emplace_back(expr->Evaluate(tuple, left_child_->GetOutputSchema()));
-      }
-    } else {
-      for (const auto &expr : plan_->RightJoinKeyExpressions()) {
-        keys.emplace_back(expr->Evaluate(tuple, right_child_->GetOutputSchema()));
-      }
-    }
-    return {keys};
-  }
-
   /** @return whether two tuple is equal in the predicate */
   auto IsEqui(const Tuple *left, const Tuple *right) -> bool {
     for (size_t i = 0; i < plan_->LeftJoinKeyExpressions().size(); i++) {
@@ -90,7 +75,7 @@ class HashJoinExecutor : public AbstractExecutor {
 
     if (right == nullptr) {
       for (size_t i = 0; i < right_child_->GetOutputSchema().GetColumnCount(); i++) {
-        ret.emplace_back(ValueFactory::GetNullValueByType(TypeId::INTEGER)); // In test case, return integer_null
+        ret.emplace_back(ValueFactory::GetNullValueByType(TypeId::INTEGER));  // In test case, return integer_null
       }
     } else {
       for (size_t i = 0; i < right_child_->GetOutputSchema().GetColumnCount(); i++) {
@@ -104,7 +89,7 @@ class HashJoinExecutor : public AbstractExecutor {
   /** The HashJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
 
-  std::unordered_map<HJKey, std::vector<Tuple>> hj_table_{};
+  std::unordered_map<hash_t, std::vector<Tuple>> hj_table_{};
 
   std::unique_ptr<AbstractExecutor> left_child_;
   std::unique_ptr<AbstractExecutor> right_child_;
