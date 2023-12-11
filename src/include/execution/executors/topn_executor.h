@@ -15,6 +15,7 @@
 #include <memory>
 #include <utility>
 #include <vector>
+#include <stack>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
@@ -63,5 +64,9 @@ class TopNExecutor : public AbstractExecutor {
   const TopNPlanNode *plan_;
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+
+  size_t cnt_{};
+
+  std::stack<Tuple> tuples_stacks_{};
 };
 }  // namespace bustub
