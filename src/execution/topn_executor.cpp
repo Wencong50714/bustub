@@ -10,7 +10,8 @@ void TopNExecutor::Init() {
   child_executor_->Init();
 
   // Define a less cmp function
-  auto cmp = [order_bys = plan_->order_bys_, schema = child_executor_->GetOutputSchema()](const Tuple &a, const Tuple &b) {
+  auto cmp = [order_bys = plan_->order_bys_, schema = child_executor_->GetOutputSchema()](const Tuple &a,
+                                                                                          const Tuple &b) {
     for (const auto &order_key : order_bys) {
       switch (order_key.first) {
         case OrderByType::INVALID:
@@ -44,21 +45,19 @@ void TopNExecutor::Init() {
 
   Tuple child_tuple{};
   RID rid{};
-
   while (child_executor_->Next(&child_tuple, &rid)) {
     pq.push(child_tuple);
 
-    if (pq.size() == plan_->GetN()) {
+    if (pq.size() > plan_->GetN()) {
       pq.pop();
     } else {
       cnt_++;
     }
   }
 
-  for (size_t i = 0; i < pq.size(); i++) {
-    auto t = pq.top();
+  while (!pq.empty()) {
+    tuples_stacks_.push(pq.top());
     pq.pop();
-    tuples_stacks_.push(t);
   }
 }
 
@@ -72,8 +71,6 @@ auto TopNExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   return true;
 }
 
-auto TopNExecutor::GetNumInHeap() -> size_t {
-    return cnt_;
-};
+auto TopNExecutor::GetNumInHeap() -> size_t { return cnt_; };
 
 }  // namespace bustub

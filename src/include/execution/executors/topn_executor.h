@@ -13,9 +13,9 @@
 #pragma once
 
 #include <memory>
+#include <stack>
 #include <utility>
 #include <vector>
-#include <stack>
 
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
