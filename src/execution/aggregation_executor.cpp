@@ -31,12 +31,10 @@ void AggregationExecutor::Init() {
   RID rid{};
 
   // In Init phase, receive all data
-  auto status = child_executor_->Next(&child_tuple, &rid);
-  while (status) {
+  while (child_executor_->Next(&child_tuple, &rid)) {
     AggregateKey keys = MakeAggregateKey(&child_tuple);
     AggregateValue values = MakeAggregateValue(&child_tuple);
     aht_.InsertCombine(keys, values);
-    status = child_executor_->Next(&child_tuple, &rid);
     empty_ = false;
   }
 

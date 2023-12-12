@@ -19,6 +19,7 @@
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/window_plan.h"
 #include "storage/table/tuple.h"
+#include "type/value_factory.h"
 
 namespace bustub {
 
@@ -85,10 +86,68 @@ class WindowFunctionExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); }
 
  private:
+  auto GenerateInitialWindowsValue(WindowFunctionType win_type) -> Value {
+    switch (win_type) {
+      case WindowFunctionType::CountStarAggregate:
+        // Count start starts at zero.
+        return ValueFactory::GetIntegerValue(0);
+        break;
+      case WindowFunctionType::CountAggregate:
+      case WindowFunctionType::SumAggregate:
+      case WindowFunctionType::MinAggregate:
+      case WindowFunctionType::MaxAggregate:
+      case WindowFunctionType::Rank:
+        // Others starts at null.
+        return ValueFactory::GetNullValueByType(TypeId::INTEGER);
+        break;
+    }
+  }
+
+  auto CombineValue(WindowFunctionType win_type, Value &result, Value &input) -> void {
+    switch (win_type) {
+      case WindowFunctionType::CountStarAggregate:
+        result = result.Add(ValueFactory::GetIntegerValue(1));
+        break;
+      case WindowFunctionType::CountAggregate:
+        if (result.IsNull()) {
+          result = ValueFactory::GetIntegerValue(1);
+        } else {
+          result = result.Add(ValueFactory::GetIntegerValue(1));
+        }
+        break;
+      case WindowFunctionType::SumAggregate:
+        if (result.IsNull()) {
+          result = input.Copy();
+        } else {
+          result = result.Add(input);
+        }
+        break;
+      case WindowFunctionType::MinAggregate:
+        if (result.IsNull()) {
+          result = input.Copy();
+        } else {
+          result = result.Min(input);
+        }
+        break;
+      case WindowFunctionType::MaxAggregate:
+        if (result.IsNull()) {
+          result = input.Copy();
+        } else {
+          result = result.Max(input);
+        }
+        break;
+      case WindowFunctionType::Rank:
+        break;
+    }
+  }
+
   /** The window aggregation plan node to be executed */
   const WindowFunctionPlanNode *plan_;
 
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+
+  std::vector<Tuple> tuples_{};
+  size_t it_{};
 };
 }  // namespace bustub
