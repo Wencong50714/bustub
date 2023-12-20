@@ -45,6 +45,7 @@ void HashJoinExecutor::Init() {
   }
 
   while (left_child_->Next(&child_tuple, &rid)) {
+    // Construct key
     hash_t hk{};
     for (const auto &expr : plan_->LeftJoinKeyExpressions()) {
       auto value = expr->Evaluate(&child_tuple, left_child_->GetOutputSchema());
@@ -62,6 +63,7 @@ void HashJoinExecutor::Init() {
       }
     }
 
+    // If Left join, add null value
     if (!is_joined && plan_->GetJoinType() == JoinType::LEFT) {
       auto values = CombineTwoTuples(&child_tuple, nullptr);
       result_tuples_.emplace_back(values, &GetOutputSchema());

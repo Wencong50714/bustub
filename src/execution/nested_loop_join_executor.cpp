@@ -41,16 +41,12 @@ void NestedLoopJoinExecutor::Init() {
   RID rid{};
 
   // Collect the all tuples from left and right executors
-  bool status = left_executor_->Next(&child_tuple, &rid);
-  while (status) {
+  while (left_executor_->Next(&child_tuple, &rid)) {
     left_tuples.emplace_back(child_tuple);
-    status = left_executor_->Next(&child_tuple, &rid);
   }
 
-  status = right_executor_->Next(&child_tuple, &rid);
-  while (status) {
+  while (right_executor_->Next(&child_tuple, &rid)) {
     right_tuples.emplace_back(child_tuple);
-    status = right_executor_->Next(&child_tuple, &rid);
   }
 
   // Nested loop join

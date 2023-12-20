@@ -28,14 +28,12 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
     // Check for non-deleted tuples
     if (!metadata.is_deleted_) {
-      bool is_valid_tuple = false;
+      bool is_valid_tuple = true;
 
       // If seq scan node have predicate, should filter
       if (plan_->filter_predicate_ != nullptr) {
         auto value = plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema());
         is_valid_tuple = !value.IsNull() && value.GetAs<bool>();
-      } else {
-        is_valid_tuple = true;
       }
 
       if (is_valid_tuple) {
