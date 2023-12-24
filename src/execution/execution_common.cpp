@@ -10,9 +10,49 @@
 
 namespace bustub {
 
+/**
+ * Apply the undo_log's modification to ret tuple
+ * @param ret  The return tuple
+ * @param modified_fields
+ * @param tuple
+ * @param schema
+ */
+auto ApplyModification(const Tuple& ret, const UndoLog& undoLog, const Schema *schema) -> Tuple {
+  // Get partial schema
+  std::vector<Column> columns{};
+  for (uint32_t i = 0; i < undoLog.modified_fields_.size(); i++) {
+    if (undoLog.modified_fields_[i]) {
+      columns.push_back(schema->GetColumn(i));
+    }
+  }
+
+  Schema partial = Schema{columns};
+
+  int cnt = 0;
+  std::vector<Value> values{};
+  for (uint32_t i = 0; i < undoLog.modified_fields_.size(); i++) {
+    undoLog.modified_fields_[i] ? values.push_back(undoLog.tuple_.GetValue(&partial, cnt++))
+                                : values.push_back(ret.GetValue(schema, i));
+  }
+
+  return {values, schema};
+}
+
 auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
                       const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple> {
-  UNIMPLEMENTED("not implemented");
+  if (undo_logs.empty()) {
+    return (base_meta.is_deleted_ ? std::nullopt : std::optional<Tuple>(base_tuple));
+  }
+
+  auto ret_tuple = base_tuple;
+
+  for (const auto &undo_log : undo_logs) {
+    if (!undo_log.is_deleted_) {
+      ret_tuple = ApplyModification(ret_tuple, undo_log, schema);
+    }
+  }
+
+  return (undo_logs.back().is_deleted_ ? std::nullopt : std::optional<Tuple>(ret_tuple));
 }
 
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
