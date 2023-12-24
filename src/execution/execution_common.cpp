@@ -10,6 +10,17 @@
 
 namespace bustub {
 
+auto GetPartialSchema(const UndoLog& undoLog, const Schema *schema) -> Schema {
+  std::vector<Column> columns{};
+  for (uint32_t i = 0; i < undoLog.modified_fields_.size(); i++) {
+    if (undoLog.modified_fields_[i]) {
+      columns.push_back(schema->GetColumn(i));
+    }
+  }
+
+  return Schema{columns};
+}
+
 /**
  * Apply the undo_log's modification to ret tuple
  * @param ret  The return tuple
@@ -19,14 +30,7 @@ namespace bustub {
  */
 auto ApplyModification(const Tuple& ret, const UndoLog& undoLog, const Schema *schema) -> Tuple {
   // Get partial schema
-  std::vector<Column> columns{};
-  for (uint32_t i = 0; i < undoLog.modified_fields_.size(); i++) {
-    if (undoLog.modified_fields_[i]) {
-      columns.push_back(schema->GetColumn(i));
-    }
-  }
-
-  Schema partial = Schema{columns};
+  Schema partial = GetPartialSchema(undoLog, schema);
 
   int cnt = 0;
   std::vector<Value> values{};
@@ -60,10 +64,45 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
   // always use stderr for printing logs...
   fmt::println(stderr, "debug_hook: {}", info);
 
-  fmt::println(
-      stderr,
-      "You see this line of text because you have not implemented `TxnMgrDbg`. You should do this once you have "
-      "finished task 2. Implementing this helper function will save you a lot of time for debugging in later tasks.");
+  std::stringstream output;
+
+  for (auto it = table_heap->MakeIterator(); !it.IsEnd(); ++it) {
+    auto rid = it.GetRID();
+
+    output << "RID=" << rid.GetPageId() << '/' << rid.GetSlotNum() << ' ';
+    auto t = it.GetTuple();
+
+    if (t.first.ts_ >= TXN_START_ID) {
+      output << "ts=txn" << t.first.ts_ - TXN_START_ID << ' ';
+    } else {
+      output << "ts=" << t.first.ts_ << ' ';
+    }
+
+    if (t.first.is_deleted_) {
+      output << "<del marker> ";
+    }
+    output << "tuple=" << t.second.ToString(&table_info->schema_) << '\n';
+
+    // Collect version chain strings
+    auto undo_link = txn_mgr->GetUndoLink(rid).value();
+    while (undo_link.IsValid()) {
+      auto undo_log = txn_mgr->GetUndoLog(undo_link);
+
+      output << "  txn" << undo_link.prev_txn_ - TXN_START_ID << ' ';
+      if (undo_log.is_deleted_) {
+        output << "<del> ";
+      } else {
+        // Assuming PrintModifiedTuple appends to the output string
+        auto sub_tuple = ApplyModification(t.second, undo_log, &table_info->schema_);
+        output << sub_tuple.ToString(&table_info->schema_) << ' ';
+      }
+      output << "ts=" << undo_log.ts_ << '\n';
+
+      undo_link = undo_log.prev_version_;
+    }
+  }
+  // Print all collected strings at once
+  std::cout << output.str();
 
   // We recommend implementing this function as traversing the table heap and print the version chain. An example output
   // of our reference solution:
