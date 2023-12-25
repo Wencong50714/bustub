@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "execution/executors/insert_executor.h"
+#include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
 
 namespace bustub {
@@ -56,6 +57,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     }
 
     if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
+      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, *new_rid); // append write set
       txn_mgr_->UpdateUndoLink(*new_rid, std::nullopt, nullptr);
     }
     cnt++;
