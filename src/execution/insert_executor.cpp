@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "execution/executors/insert_executor.h"
+#include "concurrency/transaction_manager.h"
 
 namespace bustub {
 
@@ -25,6 +26,11 @@ void InsertExecutor::Init() {
 
   table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
   table_indexes_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+
+  if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
+    txn_id_ = exec_ctx_->GetTransaction()->GetTransactionId();
+    txn_mgr_ = exec_ctx_->GetTransactionManager();
+  }
 }
 
 auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
@@ -36,6 +42,10 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   int cnt = 0;
   while (child_executor_->Next(&to_insert_tuple, rid)) {
     TupleMeta meta{INVALID_TXN_ID, false};  // may need assign value
+    if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
+      meta = TupleMeta{txn_id_, false};
+    }
+
     auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
                                                     exec_ctx_->GetTransaction(), plan_->table_oid_);
 
@@ -43,6 +53,10 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       index->index_->InsertEntry(
           to_insert_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()),
           *new_rid, exec_ctx_->GetTransaction());
+    }
+
+    if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
+      txn_mgr_->UpdateUndoLink(*new_rid, std::nullopt, nullptr);
     }
     cnt++;
   }

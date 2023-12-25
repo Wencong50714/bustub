@@ -39,7 +39,6 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 
       auto [metadata, tuple_data] = table_iter_->GetTuple();
       if (metadata.ts_ == txn_id_ || metadata.ts_ <= ts_) {
-        printf("DEBUG: directly return uncommitted tuple\n");
         if (!metadata.is_deleted_) {
           *tuple = Tuple(tuple_data);
           ++(*table_iter_);
@@ -49,20 +48,23 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         continue;
       }
 
-      auto undo_link = txn_mgr_->GetUndoLink(table_iter_->GetRID()).value();
+      if (!txn_mgr_->GetUndoLink(*rid).has_value()) {
+//        fmt::println(stderr, "Undo link is empty");
+        ++(*table_iter_);
+        continue;
+      }
+
+      auto undo_link = txn_mgr_->GetUndoLink(*rid).value();
       while (undo_link.IsValid()) {
         auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-        printf("DEBUG: log ts = %lld, ts = %lld\n", undo_log.ts_, ts_);
         undo_logs.push_back(undo_log);
         if (ts_ >= undo_log.ts_) {
-          printf("DEBUG: Find end\n");
           find_end = true;
           break;
         }
         undo_link = undo_log.prev_version_;
       }
 
-      printf("DEBUG: undo logs collect finished\n");
       auto op_tuple = ReconstructTuple(&GetOutputSchema(), Tuple(tuple_data), metadata, undo_logs);
       if (find_end && op_tuple != std::nullopt) {
         *tuple = op_tuple.value();

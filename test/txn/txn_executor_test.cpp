@@ -5,7 +5,7 @@ namespace bustub {
 
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 
-TEST(TxnExecutorTest, DISABLED_InsertTest) {  // NOLINT
+TEST(TxnExecutorTest, InsertTest) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   auto empty_table = IntResult{};
   Execute(*bustub, "CREATE TABLE maintable(a int)");

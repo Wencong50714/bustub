@@ -84,6 +84,11 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
     output << "tuple=" << t.second.ToString(&table_info->schema_) << '\n';
 
     // Collect version chain strings
+    if (!txn_mgr->GetUndoLink(rid).has_value()) {
+//      fmt::println(stderr, "Undo link is empty");
+      return;
+    }
+
     auto undo_link = txn_mgr->GetUndoLink(rid).value();
     while (undo_link.IsValid()) {
       auto undo_log = txn_mgr->GetUndoLog(undo_link);
@@ -103,6 +108,7 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
   }
   // Print all collected strings at once
   std::cout << output.str();
+  fmt::println(stderr, "debug finished");
 
   // We recommend implementing this function as traversing the table heap and print the version chain. An example output
   // of our reference solution:
