@@ -10,7 +10,7 @@
 
 namespace bustub {
 
-auto GetPartialSchema(const UndoLog& undoLog, const Schema *schema) -> Schema {
+auto GetPartialSchema(const UndoLog &undoLog, const Schema *schema) -> Schema {
   std::vector<Column> columns{};
   for (uint32_t i = 0; i < undoLog.modified_fields_.size(); i++) {
     if (undoLog.modified_fields_[i]) {
@@ -28,7 +28,7 @@ auto GetPartialSchema(const UndoLog& undoLog, const Schema *schema) -> Schema {
  * @param tuple
  * @param schema
  */
-auto ApplyModification(const Tuple& ret, const UndoLog& undoLog, const Schema *schema) -> Tuple {
+auto ApplyModification(const Tuple &ret, const UndoLog &undoLog, const Schema *schema) -> Tuple {
   // Get partial schema
   Schema partial = GetPartialSchema(undoLog, schema);
 

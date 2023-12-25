@@ -219,15 +219,26 @@ TEST(TxnScanTest, ScanTest) {  // NOLINT
   // you should think about types other than integer, and think of the case where the user updates / inserts
   // a column of null.
 
-  // query = "SELECT a FROM maintable";
-  // fmt::println(stderr, "C: Verify txn2");
-  // WithTxn(txn2, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
-  // fmt::println(stderr, "D: Verify txn3");
-  // WithTxn(txn3, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
-  // fmt::println(stderr, "E: Verify txn4");
-  // WithTxn(txn4, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
-  // fmt::println(stderr, "F: Verify txn5");
-  // WithTxn(txn5, QueryHideResult(*bustub, _var, _txn, query, IntResult{})); // <- you will need to fill in the answer
+//  RID=0/0 ts=txn8 tuple=(1, <NULL>, <NULL>)
+//      txn8 (2, <NULL>, <NULL>) ts=1
+//  RID=0/1 ts=3 tuple=(3, <NULL>, <NULL>)
+//      txn5 <del> ts=2
+//      txn3 (4, 4.000000, true) ts=1
+//  RID=0/2 ts=4 <del marker> tuple=(<NULL>, <NULL>, <NULL>)
+//      txn7 (5, 3.000000, false) ts=3
+//  RID=0/3 ts=txn6 <del marker> tuple=(<NULL>, <NULL>, <NULL>)
+//      txn6 (6, <NULL>, <NULL>) ts=2
+//      txn3 (7, <NULL>, <NULL>) ts=1
+
+   query = "SELECT a FROM maintable";
+   fmt::println(stderr, "C: Verify txn2");
+   WithTxn(txn2, QueryHideResult(*bustub, _var, _txn, query, IntResult{ {2}, {6} })); // <- you will need to fill in the answer
+   fmt::println(stderr, "D: Verify txn3");
+   WithTxn(txn3, QueryHideResult(*bustub, _var, _txn, query, IntResult{ {2}, {3}, {5} })); // <- you will need to fill in the answer
+   fmt::println(stderr, "E: Verify txn4");
+   WithTxn(txn4, QueryHideResult(*bustub, _var, _txn, query, IntResult{ {1}, {3}, {6} })); // <- you will need to fill in the answer
+   fmt::println(stderr, "F: Verify txn5");
+   WithTxn(txn5, QueryHideResult(*bustub, _var, _txn, query, IntResult{ {2}, {3}, {6} })); // <- you will need to fill in the answer
 }
 
 // NOLINTEND(bugprone-unchecked-optional-access))

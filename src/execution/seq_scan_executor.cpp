@@ -25,6 +25,7 @@ void SeqScanExecutor::Init() {
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
     ts_ = exec_ctx_->GetTransaction()->GetReadTs();
+    txn_id_ = exec_ctx_->GetTransaction()->GetTransactionId();
     txn_mgr_ = exec_ctx_->GetTransactionManager();
   }
 }
@@ -32,42 +33,45 @@ void SeqScanExecutor::Init() {
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
     while (!table_iter_->IsEnd()) {
-      auto [metadata, tuple_data] = table_iter_->GetTuple();
-
+      *rid = table_iter_->GetRID();
       std::vector<UndoLog> undo_logs{};
       bool find_end = false;
 
-      auto undo_link = txn_mgr_->GetUndoLink(table_iter_->GetRID()).value();
-      while (undo_link.IsValid()) {
-        auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-
-        if (undo_log.ts_ >= ts_) {
-          undo_logs.push_back(undo_log);
-          find_end = (undo_log.ts_ == ts_);
-        } else {
-          find_end = true;
+      auto [metadata, tuple_data] = table_iter_->GetTuple();
+      if (metadata.ts_ == txn_id_ || metadata.ts_ <= ts_) {
+        printf("DEBUG: directly return uncommitted tuple\n");
+        if (!metadata.is_deleted_) {
+          *tuple = Tuple(tuple_data);
+          ++(*table_iter_);
+          return true;
         }
-
-        undo_link = undo_log.prev_version_;
-      }
-
-      if (!find_end) {
-        // Collect next tuple
         ++(*table_iter_);
         continue;
       }
 
-      auto op_tuple = ReconstructTuple(&GetOutputSchema(), Tuple(tuple_data), metadata, undo_logs);
-      if (op_tuple == std::nullopt) {
-        return false;
+      auto undo_link = txn_mgr_->GetUndoLink(table_iter_->GetRID()).value();
+      while (undo_link.IsValid()) {
+        auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+        printf("DEBUG: log ts = %lld, ts = %lld\n", undo_log.ts_, ts_);
+        undo_logs.push_back(undo_log);
+        if (ts_ >= undo_log.ts_) {
+          printf("DEBUG: Find end\n");
+          find_end = true;
+          break;
+        }
+        undo_link = undo_log.prev_version_;
       }
 
-      *tuple = op_tuple.value();
-      *rid = table_iter_->GetRID();
-      ++(*table_iter_);
-      return true;
-    }
+      printf("DEBUG: undo logs collect finished\n");
+      auto op_tuple = ReconstructTuple(&GetOutputSchema(), Tuple(tuple_data), metadata, undo_logs);
+      if (find_end && op_tuple != std::nullopt) {
+        *tuple = op_tuple.value();
+        ++(*table_iter_);
+        return true;
+      }
 
+      ++(*table_iter_);
+    }
     return false;
   }
 
