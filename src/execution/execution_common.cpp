@@ -59,41 +59,45 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
   return (undo_logs.back().is_deleted_ ? std::nullopt : std::optional<Tuple>(ret_tuple));
 }
 
+auto GetHumanReadableTxnId(txn_id_t txn_id) -> txn_id_t { return txn_id ^ TXN_START_ID; }
+
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
                TableHeap *table_heap) {
   // always use stderr for printing logs...
-  fmt::println(stderr, "debug_hook: {}", info);
+  std::stringstream output; // Batch output to reduce terminal print I/O operations
 
-  std::stringstream output;
+  output << "debug_hook: " << info << '\n';
 
   for (auto it = table_heap->MakeIterator(); !it.IsEnd(); ++it) {
     auto rid = it.GetRID();
 
+    /*----------------- Tuple Heap Info -----------------*/
     output << "RID=" << rid.GetPageId() << '/' << rid.GetSlotNum() << ' ';
     auto t = it.GetTuple();
+    auto meta = t.first;
 
-    if (t.first.ts_ >= TXN_START_ID) {
-      output << "ts=txn" << t.first.ts_ - TXN_START_ID << ' ';
+    if (meta.ts_ >= TXN_START_ID) {
+      // tuple is modified by uncommitted txn, meta's ts is txn_id now
+      output << "ts=txn" << GetHumanReadableTxnId(meta.ts_) << ' ';
     } else {
-      output << "ts=" << t.first.ts_ << ' ';
+      output << "ts=" << meta.ts_ << ' ';
     }
 
-    if (t.first.is_deleted_) {
+    if (meta.is_deleted_) {
       output << "<del marker> ";
     }
     output << "tuple=" << t.second.ToString(&table_info->schema_) << '\n';
 
-    // Collect version chain strings
     if (!txn_mgr->GetUndoLink(rid).has_value()) {
-//      fmt::println(stderr, "Undo link is empty");
-      return;
+      continue;
     }
 
+    /*----------------- Undo log Info -----------------*/
     auto undo_link = txn_mgr->GetUndoLink(rid).value();
     while (undo_link.IsValid()) {
       auto undo_log = txn_mgr->GetUndoLog(undo_link);
 
-      output << "  txn" << undo_link.prev_txn_ - TXN_START_ID << ' ';
+      output << "  txn" << GetHumanReadableTxnId(undo_link.prev_txn_) << ' ';
       if (undo_log.is_deleted_) {
         output << "<del> ";
       } else {
@@ -107,8 +111,8 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
     }
   }
   // Print all collected strings at once
+  output << "---------------- Divider ----------------\n";
   std::cout << output.str();
-  fmt::println(stderr, "debug finished");
 
   // We recommend implementing this function as traversing the table heap and print the version chain. An example output
   // of our reference solution:

@@ -42,7 +42,6 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
   auto *txn_ref = txn.get();
   txn_map_.insert(std::make_pair(txn_id, std::move(txn)));
 
-  // TODO(fall2023): set the timestamps here. Watermark updated below.
   txn_ref->read_ts_.store(last_commit_ts_);
 
   running_txns_.AddTxn(txn_ref->read_ts_);
@@ -68,12 +67,20 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
     }
   }
 
-  // TODO(fall2023): Implement the commit logic! For task3
+  // TODO: handle edge case with insert-x-x-x-x-delete
+
+  // For tuples in write set, modify its commit ts
   for (const auto &write_set : txn->GetWriteSets()) {
     auto table_info = catalog_->GetTable(write_set.first);
 
     for (const auto &rid : write_set.second) {
       auto meta = table_info->table_->GetTuple(rid).first;
+
+      if (!GetUndoLink(rid).has_value() && meta.is_deleted_) {
+        table_info->table_->UpdateTupleMeta({0, true}, rid);
+        continue;
+      }
+
       meta.ts_ = commit_ts;
       table_info->table_->UpdateTupleMeta(meta, rid); // write back
     }

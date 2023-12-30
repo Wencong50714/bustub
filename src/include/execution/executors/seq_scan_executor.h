@@ -54,5 +54,7 @@ class SeqScanExecutor : public AbstractExecutor {
   timestamp_t ts_{};
   txn_id_t txn_id_{};
   TransactionManager *txn_mgr_;
+
+  auto CollectUndoLogs(std::vector<UndoLog> &undo_logs, RID rid) -> bool;
 };
 }  // namespace bustub

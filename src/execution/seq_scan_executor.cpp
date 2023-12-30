@@ -16,6 +16,23 @@
 
 namespace bustub {
 
+auto SeqScanExecutor::CollectUndoLogs(std::vector<UndoLog> &undo_logs, RID rid) -> bool {
+  bool find_end = false;
+  // collect undo logs
+  auto undo_link = txn_mgr_->GetUndoLink(rid).value();
+  while (undo_link.IsValid()) {
+    auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+    undo_logs.push_back(undo_log);
+    if (ts_ >= undo_log.ts_) {
+      find_end = true;
+      break;
+    }
+    undo_link = undo_log.prev_version_;
+  }
+
+  return find_end;
+}
+
 SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
     : AbstractExecutor(exec_ctx), plan_(plan) {}
 
@@ -32,47 +49,36 @@ void SeqScanExecutor::Init() {
 
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-    while (!table_iter_->IsEnd()) {
+    for (; !table_iter_->IsEnd(); ++(*table_iter_)) {
       *rid = table_iter_->GetRID();
-      std::vector<UndoLog> undo_logs{};
-      bool find_end = false;
-
       auto [metadata, tuple_data] = table_iter_->GetTuple();
+
       if (metadata.ts_ == txn_id_ || metadata.ts_ <= ts_) {
-        if (!metadata.is_deleted_) {
+        if (!metadata.is_deleted_ && (plan_->filter_predicate_ == nullptr || (plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema()).GetAs<bool>()))) {
           *tuple = Tuple(tuple_data);
           ++(*table_iter_);
           return true;
         }
-        ++(*table_iter_);
         continue;
       }
 
       if (!txn_mgr_->GetUndoLink(*rid).has_value()) {
-//        fmt::println(stderr, "Undo link is empty");
-        ++(*table_iter_);
         continue;
       }
 
-      auto undo_link = txn_mgr_->GetUndoLink(*rid).value();
-      while (undo_link.IsValid()) {
-        auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-        undo_logs.push_back(undo_log);
-        if (ts_ >= undo_log.ts_) {
-          find_end = true;
-          break;
-        }
-        undo_link = undo_log.prev_version_;
-      }
+      std::vector<UndoLog> undo_logs{};
+      bool find_end = CollectUndoLogs(undo_logs, *rid);
 
       auto op_tuple = ReconstructTuple(&GetOutputSchema(), Tuple(tuple_data), metadata, undo_logs);
       if (find_end && op_tuple != std::nullopt) {
-        *tuple = op_tuple.value();
-        ++(*table_iter_);
-        return true;
-      }
+        auto matched_tuple = op_tuple.value();
 
-      ++(*table_iter_);
+        if ((plan_->filter_predicate_ == nullptr || (plan_->filter_predicate_->Evaluate(&matched_tuple, GetOutputSchema()).GetAs<bool>()))) {
+          *tuple = matched_tuple;
+          ++(*table_iter_);
+          return true;
+        }
+      }
     }
     return false;
   }
