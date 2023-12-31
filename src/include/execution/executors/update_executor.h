@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "concurrency/transaction_manager.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/update_plan.h"
@@ -70,5 +71,11 @@ class UpdateExecutor : public AbstractExecutor {
   std::vector<IndexInfo *> table_indexes_;
 
   bool is_end_;
+
+  timestamp_t ts_;
+  TransactionManager* txn_mgr_;
+  txn_id_t txn_id_;
+
+  std::vector<RID> rids_{};
 };
 }  // namespace bustub

@@ -67,8 +67,6 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
     }
   }
 
-  // TODO: handle edge case with insert-x-x-x-x-delete
-
   // For tuples in write set, modify its commit ts
   for (const auto &write_set : txn->GetWriteSets()) {
     auto table_info = catalog_->GetTable(write_set.first);

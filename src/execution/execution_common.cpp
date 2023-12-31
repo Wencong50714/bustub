@@ -101,7 +101,7 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
       if (undo_log.is_deleted_) {
         output << "<del> ";
       } else {
-        // Assuming PrintModifiedTuple appends to the output string
+        // TODO: change a more intuitive way
         auto sub_tuple = ApplyModification(t.second, undo_log, &table_info->schema_);
         output << sub_tuple.ToString(&table_info->schema_) << ' ';
       }
