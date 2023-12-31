@@ -12,8 +12,11 @@
 #include <memory>
 
 #include "execution/executors/update_executor.h"
+#include "execution/execution_common.h"
 
 namespace bustub {
+
+
 
 UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
@@ -102,8 +105,9 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         auto undo_log = txn_mgr_->GetUndoLog(undo_link);
 
         if (meta.ts_ == txn_id_) {
-          // TODO: undo log should be a aggravate 叠加 undo log
-          printf("DEBUG: SELF MODIFICATION\n");
+          // aggregate two undo logs,
+//          printf("DEBUG: self modification\n");
+          new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
           new_undo_log.ts_ = ts_;
           new_undo_log.prev_version_ = undo_log.prev_version_;
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);

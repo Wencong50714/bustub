@@ -10,10 +10,54 @@
 
 namespace bustub {
 
-auto GetPartialSchema(const UndoLog &undoLog, const Schema *schema) -> Schema {
+std::string boolVectorToString(const std::vector<bool>& boolVector) {
+  std::ostringstream oss;
+  oss << "mf: ( ";
+  for (bool value : boolVector) {
+    // Convert boolean value to its integer representation and append to the string
+    oss << static_cast<int>(value) << ' ';
+  }
+  oss << ") ";
+  return oss.str();
+}
+
+auto OverlayUndoLog(UndoLog& new_undo_log, const UndoLog& old_undo_log, const Schema* schema) -> UndoLog {
+  BUSTUB_ASSERT(new_undo_log.modified_fields_.size() == old_undo_log.modified_fields_.size(), "Scheme should be same");
+
+  auto size = new_undo_log.modified_fields_.size();
+  std::vector<bool> mf(size, false);
+  Schema new_schema = GetPartialSchema(new_undo_log.modified_fields_, schema);
+  Schema old_schema = GetPartialSchema(old_undo_log.modified_fields_, schema);
+  int idx1 = 0;
+  int idx2 = 0;
+
+  std::vector<Value> values{};
+
+  for (size_t i = 0; i < size; i++) {
+    if (old_undo_log.modified_fields_[i]) {
+      mf[i] = true;
+      values.push_back(old_undo_log.tuple_.GetValue(&old_schema, idx1));
+    } else if (new_undo_log.modified_fields_[i]) {
+      mf[i] = true;
+      values.push_back(new_undo_log.tuple_.GetValue(&new_schema, idx2));
+    }
+
+    if (old_undo_log.modified_fields_[i]) {
+      idx1++;
+    }
+    if (new_undo_log.modified_fields_[i]) {
+      idx2++;
+    }
+  }
+
+  Schema out_schema = GetPartialSchema(mf, schema);
+  return {false, mf, {values, &out_schema}};
+}
+
+auto GetPartialSchema(const std::vector<bool> &mf, const Schema *schema) -> Schema {
   std::vector<Column> columns{};
-  for (uint32_t i = 0; i < undoLog.modified_fields_.size(); i++) {
-    if (undoLog.modified_fields_[i]) {
+  for (uint32_t i = 0; i < mf.size(); i++) {
+    if (mf[i]) {
       columns.push_back(schema->GetColumn(i));
     }
   }
@@ -30,7 +74,7 @@ auto GetPartialSchema(const UndoLog &undoLog, const Schema *schema) -> Schema {
  */
 auto ApplyModification(const Tuple &ret, const UndoLog &undoLog, const Schema *schema) -> Tuple {
   // Get partial schema
-  Schema partial = GetPartialSchema(undoLog, schema);
+  Schema partial = GetPartialSchema(undoLog.modified_fields_, schema);
 
   int cnt = 0;
   std::vector<Value> values{};
@@ -101,9 +145,9 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
       if (undo_log.is_deleted_) {
         output << "<del> ";
       } else {
-        // TODO: change a more intuitive way
         auto sub_tuple = ApplyModification(t.second, undo_log, &table_info->schema_);
         output << sub_tuple.ToString(&table_info->schema_) << ' ';
+        output << boolVectorToString(undo_log.modified_fields_);
       }
       output << "ts=" << undo_log.ts_ << '\n';
 

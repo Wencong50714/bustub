@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "execution/executors/delete_executor.h"
+#include "execution/execution_common.h"
 
 namespace bustub {
 
@@ -68,7 +69,7 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       }
 
       // Generate undo log
-      std::vector<bool> mf(GetOutputSchema().GetColumns().size(), true);
+      std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
       auto new_undo_log = UndoLog{false, mf, tuple_data, meta.ts_};
 
       if (undo_link_op.has_value()) {
@@ -76,6 +77,8 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         auto undo_log = txn_mgr_->GetUndoLog(undo_link);
 
         if (meta.ts_ == txn_id_) {
+//          printf("DEBUG: self modification\n");
+          new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
           new_undo_log.ts_ = ts_;
           new_undo_log.prev_version_ = undo_log.prev_version_;
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
