@@ -60,8 +60,7 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       }
 
       // Modify tuple heap with txn
-      TupleMeta new_meta{txn_id_, true};
-      table_info_->table_->UpdateTupleMeta(new_meta, r);
+      table_info_->table_->UpdateTupleMeta({txn_id_, true}, r);
 
       auto undo_link_op = txn_mgr_->GetUndoLink(r);
       if (!undo_link_op.has_value() && meta.ts_ == txn_id_) {
@@ -77,19 +76,15 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         auto undo_log = txn_mgr_->GetUndoLog(undo_link);
 
         if (meta.ts_ == txn_id_) {
-          // Update current undo link
-          new_undo_log.ts_ = undo_log.ts_; // change ts to old ts
+          new_undo_log.ts_ = ts_;
           new_undo_log.prev_version_ = undo_log.prev_version_;
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
         } else if (meta.ts_ < TXN_START_ID) {
-          // Append new undo link
           new_undo_log.prev_version_ = undo_link;
-          auto new_link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-          txn_mgr_->UpdateUndoLink(r, new_link, nullptr);
+          txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
         }
       } else {
-        auto new_link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-        txn_mgr_->UpdateUndoLink(r, new_link, nullptr);
+        txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
       }
 
       // add write set for later use
