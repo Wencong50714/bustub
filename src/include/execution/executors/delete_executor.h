@@ -73,6 +73,6 @@ class DeleteExecutor : public AbstractExecutor {
   TransactionManager* txn_mgr_;
   txn_id_t txn_id_;
 
-  std::vector<std::pair<RID, Tuple>> tuple_pairs_{};
+  std::vector<RID> rids_{};
 };
 }  // namespace bustub

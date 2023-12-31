@@ -35,7 +35,7 @@ void DeleteExecutor::Init() {
     Tuple child_tuple{};
     RID rid{};
     while (child_executor_->Next(&child_tuple, &rid)) {
-      tuple_pairs_.emplace_back(rid, child_tuple);
+      rids_.push_back(rid);
     }
   }
 }
@@ -48,8 +48,10 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   std::vector<Value> values;
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-    for (const auto &pair : tuple_pairs_) {
-      auto meta = table_info_->table_->GetTuple(pair.first).first;
+    for (const auto &r : rids_) {
+      auto t = table_info_->table_->GetTuple(r);
+      auto meta = t.first;
+      auto tuple_data = t.second;
 
       if ((meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) || (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
         // Two cases need to be aborted
@@ -59,16 +61,16 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
       // Modify tuple heap with txn
       TupleMeta new_meta{txn_id_, true};
-      table_info_->table_->UpdateTupleMeta(new_meta, pair.first);
+      table_info_->table_->UpdateTupleMeta(new_meta, r);
 
-      auto undo_link_op = txn_mgr_->GetUndoLink(pair.first);
+      auto undo_link_op = txn_mgr_->GetUndoLink(r);
       if (!undo_link_op.has_value() && meta.ts_ == txn_id_) {
         continue; // Directly modify the table heap tuple without generating any undo log
       }
 
       // Generate undo log
       std::vector<bool> mf(GetOutputSchema().GetColumns().size(), true);
-      auto new_undo_log = UndoLog{false, mf, pair.second, meta.ts_};
+      auto new_undo_log = UndoLog{false, mf, tuple_data, meta.ts_};
 
       if (undo_link_op.has_value()) {
         auto undo_link = undo_link_op.value();
@@ -83,17 +85,17 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
           // Append new undo link
           new_undo_log.prev_version_ = undo_link;
           auto new_link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-          txn_mgr_->UpdateUndoLink(pair.first, new_link, nullptr);
+          txn_mgr_->UpdateUndoLink(r, new_link, nullptr);
         }
       } else {
         auto new_link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-        txn_mgr_->UpdateUndoLink(pair.first, new_link, nullptr);
+        txn_mgr_->UpdateUndoLink(r, new_link, nullptr);
       }
 
       // add write set for later use
-      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, pair.first);
+      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
     }
-    values.emplace_back(INTEGER, static_cast<int>(tuple_pairs_.size()));
+    values.emplace_back(INTEGER, static_cast<int>(rids_.size()));
   } else {
     Tuple child_tuple{};
     int cnt = 0;
