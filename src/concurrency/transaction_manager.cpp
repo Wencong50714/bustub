@@ -108,6 +108,77 @@ void TransactionManager::Abort(Transaction *txn) {
   running_txns_.RemoveTxn(txn->read_ts_);
 }
 
-void TransactionManager::GarbageCollection() { UNIMPLEMENTED("not implemented"); }
+/**
+ * Traverse the version chain, if find invisible undolog, change it's ts_ to INVALID_TS
+ * @param undo_link
+ */
+auto TransactionManager::FindAndSetInvisible(UndoLink undo_link) -> void {
+  auto watermark = GetWatermark();
+  auto invalid_undo_link = UndoLink{INVALID_TXN_ID, 0};
+  bool flag = false; // Find the invisible undo log
+
+  // traverse the version chain
+  std::unique_lock<std::shared_mutex> l(txn_map_mutex_);
+  while (undo_link != invalid_undo_link) {
+    auto undo_log = GetUndoLog(undo_link);
+
+    if (flag) {
+      auto txn_ref = txn_map_[undo_link.prev_txn_];
+      BUSTUB_ASSERT(txn_ref->GetTransactionState() != TransactionState::RUNNING, "It's impossible");
+      undo_log.ts_ = INVALID_TS;
+      txn_ref->ModifyUndoLog(undo_link.prev_log_idx_, undo_log); // change ts to invalid indicate invisible
+    } else if (undo_log.ts_ < watermark) {
+      flag = true;
+    }
+
+    undo_link = undo_log.prev_version_;
+  }
+}
+
+void TransactionManager::GarbageCollection() {
+  // TODO: have infinite loop
+  // PHASE 1: Iterate all version chain to set invisible undo logs
+  std::shared_lock<std::shared_mutex> lck(version_info_mutex_);
+  for (const auto & iter : version_info_) {
+    auto pg_ver_info = iter.second;
+
+    std::unique_lock<std::shared_mutex> lck2(pg_ver_info->mutex_);
+    for (const auto & iter2 : pg_ver_info->prev_version_) {
+      auto first_link = iter2.second.prev_;
+      auto first_log = GetUndoLog(first_link);
+
+      FindAndSetInvisible(first_log.prev_version_); // first log can't be collect
+    }
+  }
+  lck.unlock();
+
+  // PHASE 2: remove expired txns
+  std::unique_lock<std::shared_mutex> l(txn_map_mutex_);
+
+  std::vector<txn_id_t> txns_to_remove{}; // reserve to_remove txn id
+
+  for (const auto & txn_entry : txn_map_) {
+    auto txn_ref = txn_entry.second;
+
+    if (txn_ref->GetTransactionState() != TransactionState::RUNNING) {
+      // TODO: be careful for TAINTED txn
+      bool gc_flag = true;
+
+      for (size_t i = 0; i < txn_ref->GetUndoLogNum(); i++) {
+        if (txn_ref->GetUndoLog(i).ts_ != INVALID_TS) {
+          gc_flag = false;
+        }
+      }
+
+      if (gc_flag) {
+        txns_to_remove.emplace_back(txn_entry.first);
+      }
+    }
+  }
+
+  for (const auto &txn_id : txns_to_remove) {
+    txn_map_.erase(txn_id);
+  }
+}
 
 }  // namespace bustub

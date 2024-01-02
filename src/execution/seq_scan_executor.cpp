@@ -21,7 +21,13 @@ auto SeqScanExecutor::CollectUndoLogs(std::vector<UndoLog> &undo_logs, RID rid) 
   // collect undo logs
   auto undo_link = txn_mgr_->GetUndoLink(rid).value();
   while (undo_link.IsValid()) {
-    auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+    auto undo_log_op = txn_mgr_->GetUndoLogOptional(undo_link);
+    if (!undo_log_op.has_value()) {
+      break;
+    }
+
+    auto undo_log = undo_log_op.value();
+
     undo_logs.push_back(undo_log);
     if (ts_ >= undo_log.ts_) {
       find_end = true;

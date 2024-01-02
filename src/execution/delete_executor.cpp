@@ -79,8 +79,6 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         if (meta.ts_ == txn_id_) {
 //          printf("DEBUG: self modification\n");
           new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
-          new_undo_log.ts_ = ts_;
-          new_undo_log.prev_version_ = undo_log.prev_version_;
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
         } else if (meta.ts_ < TXN_START_ID) {
           new_undo_log.prev_version_ = undo_link;

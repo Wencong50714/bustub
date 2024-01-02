@@ -21,6 +21,13 @@ std::string boolVectorToString(const std::vector<bool>& boolVector) {
   return oss.str();
 }
 
+/**
+ * Overlay two undo logs
+ * @param new_undo_log The newer one
+ * @param old_undo_log The older one
+ * @param schema The Intact tuple schema
+ * @return The overlaid undo log
+ */
 auto OverlayUndoLog(UndoLog& new_undo_log, const UndoLog& old_undo_log, const Schema* schema) -> UndoLog {
   BUSTUB_ASSERT(new_undo_log.modified_fields_.size() == old_undo_log.modified_fields_.size(), "Scheme should be same");
 
@@ -42,16 +49,12 @@ auto OverlayUndoLog(UndoLog& new_undo_log, const UndoLog& old_undo_log, const Sc
       values.push_back(new_undo_log.tuple_.GetValue(&new_schema, idx2));
     }
 
-    if (old_undo_log.modified_fields_[i]) {
-      idx1++;
-    }
-    if (new_undo_log.modified_fields_[i]) {
-      idx2++;
-    }
+    if (old_undo_log.modified_fields_[i]) { idx1++; }
+    if (new_undo_log.modified_fields_[i]) { idx2++; }
   }
 
   Schema out_schema = GetPartialSchema(mf, schema);
-  return {false, mf, {values, &out_schema}};
+  return {false, mf, {values, &out_schema}, old_undo_log.ts_, old_undo_log.prev_version_};
 }
 
 auto GetPartialSchema(const std::vector<bool> &mf, const Schema *schema) -> Schema {
@@ -139,7 +142,12 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
     /*----------------- Undo log Info -----------------*/
     auto undo_link = txn_mgr->GetUndoLink(rid).value();
     while (undo_link.IsValid()) {
-      auto undo_log = txn_mgr->GetUndoLog(undo_link);
+      auto undo_log_op = txn_mgr->GetUndoLogOptional(undo_link);
+      if (!undo_log_op.has_value()) {
+        break;
+      }
+
+      auto undo_log = undo_log_op.value();
 
       output << "  txn" << GetHumanReadableTxnId(undo_link.prev_txn_) << ' ';
       if (undo_log.is_deleted_) {

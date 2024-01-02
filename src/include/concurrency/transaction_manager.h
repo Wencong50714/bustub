@@ -116,6 +116,8 @@ class TransactionManager {
    * heap. */
   void GarbageCollection();
 
+  auto FindAndSetInvisible(UndoLink undo_link) -> void;
+
   /** protects txn map */
   std::shared_mutex txn_map_mutex_;
   /** All transactions, running or committed */
