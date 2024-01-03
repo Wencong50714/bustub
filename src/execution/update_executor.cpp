@@ -11,12 +11,10 @@
 //===----------------------------------------------------------------------===//
 #include <memory>
 
-#include "execution/executors/update_executor.h"
 #include "execution/execution_common.h"
+#include "execution/executors/update_executor.h"
 
 namespace bustub {
-
-
 
 UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
@@ -93,7 +91,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
       auto undo_link_op = txn_mgr_->GetUndoLink(r);
       if (!undo_link_op.has_value() && meta.ts_ == txn_id_) {
-        continue; // Directly modify the table heap tuple without generating any undo log
+        continue;  // Directly modify the table heap tuple without generating any undo log
       }
 
       // Generate undo log
@@ -106,7 +104,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
         if (meta.ts_ == txn_id_) {
           // aggregate two undo logs,
-//          printf("DEBUG: self modification\n");
+          //          printf("DEBUG: self modification\n");
           new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
         } else if (meta.ts_ < TXN_START_ID) {
@@ -121,8 +119,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
     }
     ret_values.emplace_back(INTEGER, static_cast<int>(rids_.size()));
-  }
-  else {
+  } else {
     Tuple child_tuple{};
     int cnt = 0;
     while (child_executor_->Next(&child_tuple, rid)) {

@@ -12,9 +12,9 @@
 
 #include <memory>
 
-#include "execution/executors/insert_executor.h"
 #include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
+#include "execution/executors/insert_executor.h"
 
 namespace bustub {
 
@@ -42,23 +42,65 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   Tuple to_insert_tuple{};
   int cnt = 0;
   while (child_executor_->Next(&to_insert_tuple, rid)) {
-    TupleMeta meta{INVALID_TXN_ID, false};  // may need assign value
     if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-      meta = TupleMeta{txn_id_, false};
-    }
+      if (!table_indexes_.empty()) {
+        // If table have index
+        BUSTUB_ASSERT(table_indexes_.size() == 1, "Only support primary key");
+        auto primary_index = table_indexes_[0];
+        BUSTUB_ASSERT(primary_index->is_primary_key_,
+                      "In the case that db only contain one index, it must be primary index");
 
-    auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
-                                                    exec_ctx_->GetTransaction(), plan_->table_oid_);
+        std::vector<RID> rids{};
+        primary_index->index_->ScanKey(to_insert_tuple.KeyFromTuple(table_info_->schema_, primary_index->key_schema_,
+                                                                    primary_index->index_->GetKeyAttrs()),
+                                       &rids, exec_ctx_->GetTransaction());
 
-    for (auto index : table_indexes_) {
-      index->index_->InsertEntry(
-          to_insert_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()),
-          *new_rid, exec_ctx_->GetTransaction());
-    }
+        if (!rids.empty()) {
+          // already have index
+          // TODO(T4.2): it is possible that the index points to a deleted tuple, in this case, should not abort
+          exec_ctx_->GetTransaction()->SetTainted();
+          throw ExecutionException("write-write conflict");
+        }
 
-    if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, *new_rid); // append write set
-      txn_mgr_->UpdateUndoLink(*new_rid, std::nullopt, nullptr);
+        // create a tuple on the table heap with a transaction temporary timestamp
+        TupleMeta meta{txn_id_, false};
+        auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
+                                                        exec_ctx_->GetTransaction(), plan_->table_oid_);
+        BUSTUB_ASSERT(new_rid.has_value(), "New allocated tuple must have valid rid");
+
+        // insert index entry
+        if (!primary_index->index_->InsertEntry(
+                to_insert_tuple.KeyFromTuple(table_info_->schema_, primary_index->key_schema_,
+                                             primary_index->index_->GetKeyAttrs()),
+                *new_rid, exec_ctx_->GetTransaction())) {
+          // unique key constraint is violated
+          exec_ctx_->GetTransaction()->SetTainted();
+          throw ExecutionException("write-write conflict");
+        }
+
+        exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, *new_rid);  // append write set
+        txn_mgr_->UpdateUndoLink(*new_rid, std::nullopt, nullptr);
+      } else {
+        // There is no index
+        TupleMeta meta{txn_id_, false};
+        auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
+                                                        exec_ctx_->GetTransaction(), plan_->table_oid_);
+        BUSTUB_ASSERT(new_rid.has_value(), "New allocated tuple must have valid rid");
+
+        exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, *new_rid);  // append write set
+        txn_mgr_->UpdateUndoLink(*new_rid, std::nullopt, nullptr);
+      }
+    } else {
+      TupleMeta meta{INVALID_TXN_ID, false};
+      auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
+                                                      exec_ctx_->GetTransaction(), plan_->table_oid_);
+      BUSTUB_ASSERT(new_rid.has_value(), "New allocated tuple must have valid rid");
+
+      for (auto index : table_indexes_) {
+        index->index_->InsertEntry(
+            to_insert_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()),
+            *new_rid, exec_ctx_->GetTransaction());
+      }
     }
     cnt++;
   }

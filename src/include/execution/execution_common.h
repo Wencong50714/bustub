@@ -12,7 +12,7 @@ namespace bustub {
 
 auto GetPartialSchema(const std::vector<bool> &mf, const Schema *schema) -> Schema;
 
-auto OverlayUndoLog(UndoLog& new_undo_log, const UndoLog& old_undo_log, const Schema* schema) -> UndoLog;
+auto OverlayUndoLog(UndoLog &new_undo_log, const UndoLog &old_undo_log, const Schema *schema) -> UndoLog;
 
 auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
                       const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple>;

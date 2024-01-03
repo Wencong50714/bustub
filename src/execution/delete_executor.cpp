@@ -12,8 +12,8 @@
 
 #include <memory>
 
-#include "execution/executors/delete_executor.h"
 #include "execution/execution_common.h"
+#include "execution/executors/delete_executor.h"
 
 namespace bustub {
 
@@ -65,7 +65,7 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
       auto undo_link_op = txn_mgr_->GetUndoLink(r);
       if (!undo_link_op.has_value() && meta.ts_ == txn_id_) {
-        continue; // Directly modify the table heap tuple without generating any undo log
+        continue;  // Directly modify the table heap tuple without generating any undo log
       }
 
       // Generate undo log
@@ -77,7 +77,7 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         auto undo_log = txn_mgr_->GetUndoLog(undo_link);
 
         if (meta.ts_ == txn_id_) {
-//          printf("DEBUG: self modification\n");
+          //          printf("DEBUG: self modification\n");
           new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
         } else if (meta.ts_ < TXN_START_ID) {

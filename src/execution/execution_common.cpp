@@ -10,7 +10,7 @@
 
 namespace bustub {
 
-std::string boolVectorToString(const std::vector<bool>& boolVector) {
+auto BoolVectorToString(const std::vector<bool> &boolVector) -> std::string {
   std::ostringstream oss;
   oss << "mf: ( ";
   for (bool value : boolVector) {
@@ -28,7 +28,7 @@ std::string boolVectorToString(const std::vector<bool>& boolVector) {
  * @param schema The Intact tuple schema
  * @return The overlaid undo log
  */
-auto OverlayUndoLog(UndoLog& new_undo_log, const UndoLog& old_undo_log, const Schema* schema) -> UndoLog {
+auto OverlayUndoLog(UndoLog &new_undo_log, const UndoLog &old_undo_log, const Schema *schema) -> UndoLog {
   BUSTUB_ASSERT(new_undo_log.modified_fields_.size() == old_undo_log.modified_fields_.size(), "Scheme should be same");
 
   auto size = new_undo_log.modified_fields_.size();
@@ -49,8 +49,12 @@ auto OverlayUndoLog(UndoLog& new_undo_log, const UndoLog& old_undo_log, const Sc
       values.push_back(new_undo_log.tuple_.GetValue(&new_schema, idx2));
     }
 
-    if (old_undo_log.modified_fields_[i]) { idx1++; }
-    if (new_undo_log.modified_fields_[i]) { idx2++; }
+    if (old_undo_log.modified_fields_[i]) {
+      idx1++;
+    }
+    if (new_undo_log.modified_fields_[i]) {
+      idx2++;
+    }
   }
 
   Schema out_schema = GetPartialSchema(mf, schema);
@@ -111,7 +115,7 @@ auto GetHumanReadableTxnId(txn_id_t txn_id) -> txn_id_t { return txn_id ^ TXN_ST
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
                TableHeap *table_heap) {
   // always use stderr for printing logs...
-  std::stringstream output; // Batch output to reduce terminal print I/O operations
+  std::stringstream output;  // Batch output to reduce terminal print I/O operations
 
   output << "debug_hook: " << info << '\n';
 
@@ -155,7 +159,7 @@ void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const Table
       } else {
         auto sub_tuple = ApplyModification(t.second, undo_log, &table_info->schema_);
         output << sub_tuple.ToString(&table_info->schema_) << ' ';
-        output << boolVectorToString(undo_log.modified_fields_);
+        output << BoolVectorToString(undo_log.modified_fields_);
       }
       output << "ts=" << undo_log.ts_ << '\n';
 

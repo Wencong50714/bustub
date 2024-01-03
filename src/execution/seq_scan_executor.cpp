@@ -60,7 +60,9 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       auto [metadata, tuple_data] = table_iter_->GetTuple();
 
       if (metadata.ts_ == txn_id_ || metadata.ts_ <= ts_) {
-        if (!metadata.is_deleted_ && (plan_->filter_predicate_ == nullptr || (plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema()).GetAs<bool>()))) {
+        if (!metadata.is_deleted_ &&
+            (plan_->filter_predicate_ == nullptr ||
+             (plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema()).GetAs<bool>()))) {
           *tuple = Tuple(tuple_data);
           ++(*table_iter_);
           return true;
@@ -79,7 +81,8 @@ auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
       if (find_end && op_tuple != std::nullopt) {
         auto matched_tuple = op_tuple.value();
 
-        if ((plan_->filter_predicate_ == nullptr || (plan_->filter_predicate_->Evaluate(&matched_tuple, GetOutputSchema()).GetAs<bool>()))) {
+        if ((plan_->filter_predicate_ == nullptr ||
+             (plan_->filter_predicate_->Evaluate(&matched_tuple, GetOutputSchema()).GetAs<bool>()))) {
           *tuple = matched_tuple;
           ++(*table_iter_);
           return true;

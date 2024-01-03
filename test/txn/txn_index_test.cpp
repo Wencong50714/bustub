@@ -14,7 +14,7 @@ namespace bustub {
 
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 
-TEST(TxnIndexTest, DISABLED_IndexInsertTest) {  // NOLINT
+TEST(TxnIndexTest, IndexInsertTest) {  // NOLINT
   auto bustub = std::make_unique<BustubInstance>();
   const std::string query = "SELECT * FROM maintable";
 
@@ -83,7 +83,7 @@ TEST(TxnIndexTest, DISABLED_IndexInsertTest) {  // NOLINT
                                 }));
 }
 
-TEST(TxnIndexTest, DISABLED_InsertDeleteTest) {  // NOLINT
+TEST(TxnIndexTest, InsertDeleteTest) {  // NOLINT
   const std::string query = "SELECT * FROM maintable";
 
   auto bustub = std::make_unique<BustubInstance>();
@@ -110,6 +110,7 @@ TEST(TxnIndexTest, DISABLED_InsertDeleteTest) {  // NOLINT
 
   // hidden tests in-between
 
+  // TODO: do index scan to pass it
   WithTxn(txn1_reverify, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 0}, {2, 0}, {3, 0}, {4, 0}}));
   WithTxn(txn1_reverify, QueryIndex(*bustub, _var, _txn, query, "col1", std::vector<int>{1, 2, 3, 4},
                                     IntResult{{1, 0}, {2, 0}, {3, 0}, {4, 0}}));
