@@ -47,5 +47,11 @@ class IndexScanExecutor : public AbstractExecutor {
   HashTableIndexForTwoIntegerColumn *htable_;
   std::vector<RID> rids_;
   std::vector<RID>::const_iterator rid_iter_{};
+
+  timestamp_t ts_{};
+  txn_id_t txn_id_{};
+  TransactionManager *txn_mgr_;
+
+  auto CollectUndoLogs(std::vector<UndoLog> &undo_logs, RID rid) -> bool;
 };
 }  // namespace bustub

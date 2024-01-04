@@ -15,6 +15,7 @@
 #include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
 #include "execution/executors/insert_executor.h"
+#include "execution/execution_common.h"
 
 namespace bustub {
 
@@ -29,6 +30,7 @@ void InsertExecutor::Init() {
   table_indexes_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
+    ts_ = exec_ctx_->GetTransaction()->GetReadTs();
     txn_id_ = exec_ctx_->GetTransaction()->GetTransactionId();
     txn_mgr_ = exec_ctx_->GetTransactionManager();
   }
@@ -56,10 +58,50 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
                                        &rids, exec_ctx_->GetTransaction());
 
         if (!rids.empty()) {
-          // already have index
-          // TODO(T4.2): it is possible that the index points to a deleted tuple, in this case, should not abort
-          exec_ctx_->GetTransaction()->SetTainted();
-          throw ExecutionException("write-write conflict");
+          BUSTUB_ASSERT(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
+
+          auto r = rids[0];
+          auto meta  = table_info_->table_->GetTuple(r).first;
+
+          if (!meta.is_deleted_ || (meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) || (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
+            exec_ctx_->GetTransaction()->SetTainted();
+            throw ExecutionException("write-write conflict");
+          }
+
+          auto ver_link_op = txn_mgr_->GetVersionLink(r);
+          BUSTUB_ASSERT(ver_link_op.has_value(), "Tuple with index must have version link");
+
+          auto ver_link = ver_link_op.value();
+          if (ver_link.in_progress_) {
+            exec_ctx_->GetTransaction()->SetTainted();
+            throw ExecutionException("write-write conflict");
+          }
+
+          // indicate this version is ongoing by current txn
+          ver_link.in_progress_ = true;
+          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+
+          // Generate false undo_log
+          std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
+          auto new_undo_log = UndoLog{true, mf, {}, meta.ts_};
+
+          auto undo_link = ver_link.prev_;
+          auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+
+          if (meta.ts_ == txn_id_) {
+            // INSERT -> DELETE -> [[INSERT]]
+            new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
+            exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+          } else {
+            // new inserted
+            new_undo_log.prev_version_ = undo_link;
+            auto new_link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+            ver_link.prev_ = new_link;
+          }
+
+          ver_link.in_progress_ = false;
+          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+          exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
         }
 
         // create a tuple on the table heap with a transaction temporary timestamp

@@ -64,6 +64,8 @@ class InsertExecutor : public AbstractExecutor {
   TableInfo *table_info_;
   std::vector<IndexInfo *> table_indexes_;
   bool is_end_;
+
+  timestamp_t ts_;
   txn_id_t txn_id_;
   TransactionManager *txn_mgr_;
 };
