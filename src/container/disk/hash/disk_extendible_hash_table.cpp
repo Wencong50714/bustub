@@ -124,7 +124,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     dir_page->SetBucketPageId(bucket_idx, bucket_page_id);
   }
 
-  auto bucket_page = bpm_->FetchPageWrite(bucket_page_id).template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+  auto bucket_guard = bpm_->FetchPageWrite(bucket_page_id);
+  auto bucket_page = bucket_guard.template AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
 
   V val;
   if (bucket_page->Lookup(key, val, cmp_)) {

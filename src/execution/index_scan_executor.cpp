@@ -11,8 +11,8 @@
 //===----------------------------------------------------------------------===//
 #include "execution/executors/index_scan_executor.h"
 #include "concurrency/transaction_manager.h"
-#include "execution/expressions/column_value_expression.h"
 #include "execution/execution_common.h"
+#include "execution/expressions/column_value_expression.h"
 
 namespace bustub {
 
@@ -65,7 +65,8 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     for (; rid_iter_ != rids_.end(); ++rid_iter_) {
       *rid = *rid_iter_;
       auto [metadata, tuple_data] = table_info->table_->GetTuple(*rid_iter_);
-      auto pred = plan_->filter_predicate_ == nullptr || (plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema()).GetAs<bool>());
+      auto pred = plan_->filter_predicate_ == nullptr ||
+                  (plan_->filter_predicate_->Evaluate(&tuple_data, GetOutputSchema()).GetAs<bool>());
 
       // can directly read tuple from tuple heap
       if (metadata.ts_ == txn_id_ || metadata.ts_ <= ts_) {

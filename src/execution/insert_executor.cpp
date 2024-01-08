@@ -14,8 +14,8 @@
 
 #include "concurrency/transaction.h"
 #include "concurrency/transaction_manager.h"
-#include "execution/executors/insert_executor.h"
 #include "execution/execution_common.h"
+#include "execution/executors/insert_executor.h"
 
 namespace bustub {
 
@@ -61,9 +61,10 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
           BUSTUB_ASSERT(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
 
           auto r = rids[0];
-          auto meta  = table_info_->table_->GetTuple(r).first;
+          auto meta = table_info_->table_->GetTuple(r).first;
 
-          if (!meta.is_deleted_ || (meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) || (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
+          if (!meta.is_deleted_ || (meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) ||
+              (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
             exec_ctx_->GetTransaction()->SetTainted();
             throw ExecutionException("write-write conflict");
           }
