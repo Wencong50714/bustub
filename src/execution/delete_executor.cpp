@@ -50,46 +50,14 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
     for (const auto &r : rids_) {
-      auto t = table_info_->table_->GetTuple(r);
-      auto meta = t.first;
-      auto tuple_data = t.second;
+      auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
 
-      if ((meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) || (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
-        // Two cases need to be aborted
-        exec_ctx_->GetTransaction()->SetTainted();
-        throw ExecutionException("write-write conflict");
-      }
 
-      // Modify tuple heap with txn
-      table_info_->table_->UpdateTupleMeta({txn_id_, true}, r);
-
-      auto undo_link_op = txn_mgr_->GetUndoLink(r);
-      if (!undo_link_op.has_value() && meta.ts_ == txn_id_) {
-        continue;  // Directly modify the table heap tuple without generating any undo log
-      }
-
-      // Generate undo log
       std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
       auto new_undo_log = UndoLog{false, mf, tuple_data, meta.ts_};
 
-      if (undo_link_op.has_value()) {
-        auto undo_link = undo_link_op.value();
-        auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-
-        if (meta.ts_ == txn_id_) {
-          //          printf("DEBUG: self modification\n");
-          new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
-          exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
-        } else if (meta.ts_ < TXN_START_ID) {
-          new_undo_log.prev_version_ = undo_link;
-          txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
-        }
-      } else {
-        txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
-      }
-
-      // add write set for later use
-      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
+      UpdateWithVersionLink(r, std::nullopt, new_undo_log, exec_ctx_->GetTransaction(), txn_mgr_, table_info_,
+                            &child_executor_->GetOutputSchema(), plan_->table_oid_);
     }
     values.emplace_back(INTEGER, static_cast<int>(rids_.size()));
   } else {

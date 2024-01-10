@@ -10,6 +10,10 @@
 
 namespace bustub {
 
+auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
+                           Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
+                           const Schema *child_schema, table_oid_t t_id) -> void;
+
 auto GetPartialSchema(const std::vector<bool> &mf, const Schema *schema) -> Schema;
 
 auto OverlayUndoLog(UndoLog &new_undo_log, const UndoLog &old_undo_log, const Schema *schema) -> UndoLog;

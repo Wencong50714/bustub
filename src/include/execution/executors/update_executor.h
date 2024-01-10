@@ -77,5 +77,7 @@ class UpdateExecutor : public AbstractExecutor {
   txn_id_t txn_id_;
 
   std::vector<RID> rids_{};
+
+  auto GetPartialAndWholeTuple(Tuple &tuple_data, timestamp_t meta_ts) -> std::pair<UndoLog, Tuple>;
 };
 }  // namespace bustub

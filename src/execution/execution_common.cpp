@@ -10,6 +10,95 @@
 
 namespace bustub {
 
+auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
+                           Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
+                           const Schema *child_schema, table_oid_t t_id) -> void {
+  auto txn_id = txn->GetTransactionId();
+
+  auto [meta, tuple_data] = table_info->table_->GetTuple(r);
+
+  if (meta.ts_ == txn_id) {
+    auto ver_link_op = txn_mgr->GetVersionLink(r);
+    if (ver_link_op.has_value()) {
+      // Update undo log
+      auto undo_link = ver_link_op.value().prev_;
+      auto undo_log = txn_mgr->GetUndoLog(undo_link);
+      new_undo_log = OverlayUndoLog(new_undo_log, undo_log, child_schema);
+      txn->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+    }
+
+    // Modify tuple heap
+    if (!to_update_tuple.has_value()) {
+      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
+    } else {
+      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
+    }
+    return;
+  }
+
+  // check and modify version link
+  auto ver_link_op = txn_mgr->GetVersionLink(r);
+  if (ver_link_op.has_value()) {
+    auto ver_link = ver_link_op.value();
+    if (ver_link.in_progress_) {
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict");
+    }
+
+    // set ver_link in_progress to true
+    ver_link.in_progress_ = true;
+    txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+
+    // detect write-write conflict
+    if ((meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
+      // Two cases need to be aborted
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict");
+    }
+
+    // link undo log to version chain
+    auto undo_link = ver_link.prev_;
+    auto undo_log = txn_mgr->GetUndoLog(undo_link);
+    new_undo_log.prev_version_ = undo_link;
+    ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
+
+    // update table heap content
+    if (!to_update_tuple.has_value()) {
+      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
+    } else {
+      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
+    }
+
+    // set in_progress back to false
+    ver_link.in_progress_ = false;
+    txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+  } else {
+    // create a placeholder version link
+    auto ver_link = VersionUndoLink{{}, true};
+    txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+
+    // detect write-write conflict
+    if ((meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
+      // Two cases need to be aborted
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict");
+    }
+
+    // update tuple heap contents
+    if (!to_update_tuple.has_value()) {
+      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
+    } else {
+      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
+    }
+
+    ver_link.in_progress_ = false;
+    txn_mgr->UpdateUndoLink(r, txn->AppendUndoLog(new_undo_log));
+  }
+
+  // add write set
+  txn->AppendWriteSet(t_id, r);
+}
+
 auto BoolVectorToString(const std::vector<bool> &boolVector) -> std::string {
   std::ostringstream oss;
   oss << "mf: ( ";

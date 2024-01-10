@@ -50,74 +50,16 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   std::vector<Value> ret_values;
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-    for (const auto &r : rids_) {
-      auto t = table_info_->table_->GetTuple(r);
-      auto meta = t.first;
-      auto tuple_data = t.second;
+    printf("DEBUG: Modify the non-primary key\n");
+    for (const auto & r : rids_) {
+      auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
 
-      if ((meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) || (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
-        // Two cases need to be aborted
-        exec_ctx_->GetTransaction()->SetTainted();
-        throw ExecutionException("write-write conflict");
-      }
+      auto [undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
 
-      // Use to construct new tuple contents and undo log tuple
-      std::vector<Value> whole_values{};
-      std::vector<Value> part_values{};
-      std::vector<uint32_t> attrs;
-      std::vector<bool> mf{};
-
-      // evaluate the tuple data
-      uint32_t i = 0;
-      for (const auto &expr : plan_->target_expressions_) {
-        auto before = tuple_data.GetValue(&child_executor_->GetOutputSchema(), i);
-        auto after = expr->Evaluate(&tuple_data, child_executor_->GetOutputSchema());
-
-        if (before.CompareExactlyEquals(after)) {
-          mf.push_back(false);
-        } else {
-          mf.push_back(true);
-          part_values.push_back(before);
-          attrs.push_back(i);
-        }
-
-        whole_values.push_back(after);
-        i++;
-      }
-
-      // Update tuple heap
-      auto to_update_tuple = Tuple{whole_values, &child_executor_->GetOutputSchema()};
-      table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r);
-
-      auto undo_link_op = txn_mgr_->GetUndoLink(r);
-      if (!undo_link_op.has_value() && meta.ts_ == txn_id_) {
-        continue;  // Directly modify the table heap tuple without generating any undo log
-      }
-
-      // Generate undo log
-      Schema s = Schema::CopySchema(&child_executor_->GetOutputSchema(), attrs);
-      auto new_undo_log = UndoLog{false, mf, Tuple{part_values, &s}, meta.ts_};
-
-      if (undo_link_op.has_value()) {
-        auto undo_link = undo_link_op.value();
-        auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-
-        if (meta.ts_ == txn_id_) {
-          // aggregate two undo logs,
-          //          printf("DEBUG: self modification\n");
-          new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
-          exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
-        } else if (meta.ts_ < TXN_START_ID) {
-          new_undo_log.prev_version_ = undo_link;
-          txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
-        }
-      } else {
-        txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
-      }
-
-      // add write set for later use
-      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
+      UpdateWithVersionLink(r, to_update_tuple, undo_log, exec_ctx_->GetTransaction(), txn_mgr_,
+                            table_info_, &child_executor_->GetOutputSchema(), plan_->table_oid_);
     }
+
     ret_values.emplace_back(INTEGER, static_cast<int>(rids_.size()));
   } else {
     Tuple child_tuple{};
@@ -157,6 +99,55 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   *tuple = Tuple(ret_values, &GetOutputSchema());
   is_end_ = true;
   return true;
+}
+
+auto UpdateExecutor::GetPartialAndWholeTuple(Tuple &tuple_data, timestamp_t meta_ts) -> std::pair<UndoLog, Tuple> {
+  std::vector<Value> whole_values{};
+  std::vector<Value> part_values{};
+  std::vector<uint32_t> attrs;
+  std::vector<bool> mf{};
+
+  // evaluate the tuple data
+  uint32_t i = 0;
+  for (const auto &expr : plan_->target_expressions_) {
+    auto before = tuple_data.GetValue(&child_executor_->GetOutputSchema(), i);
+    auto after = expr->Evaluate(&tuple_data, child_executor_->GetOutputSchema());
+
+    if (before.CompareExactlyEquals(after)) {
+      mf.push_back(false);
+    } else {
+      mf.push_back(true);
+      part_values.push_back(before);
+      attrs.push_back(i);
+    }
+
+    whole_values.push_back(after);
+    i++;
+  }
+
+  // TODO(chenzonghao): Check the stmt below
+  // auto key = to_insert_tuple.KeyFromTuple(table_info_->schema_, primary_index->key_schema_,
+  // primary_index->index_->GetKeyAttrs());
+
+  Schema s = Schema::CopySchema(&child_executor_->GetOutputSchema(), attrs);
+
+  auto part = Tuple(part_values, &s);
+  auto whole = Tuple(whole_values, &child_executor_->GetOutputSchema());
+  auto new_undo_log = UndoLog{false, mf, Tuple{part_values, &s}, meta_ts};
+
+//  if (!table_indexes_.empty()) {
+//    BUSTUB_ASSERT(table_indexes_.size() == 1, "Only support primary key");
+//    auto primary_index = table_indexes_[0];
+//    BUSTUB_ASSERT(primary_index->is_primary_key_,
+//                  "In the case that db only contain one index, it must be primary index");
+//
+//    auto key = Tuple(part_values, &primary_index->key_schema_);
+//    if (IsTupleContentEqual(key, part)) {
+//      modify_pkey_ = true;
+//    }
+//  }
+
+  return {new_undo_log, whole};
 }
 
 }  // namespace bustub
