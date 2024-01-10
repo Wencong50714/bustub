@@ -50,7 +50,6 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   std::vector<Value> ret_values;
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-    printf("DEBUG: Modify the non-primary key\n");
     for (const auto & r : rids_) {
       auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
 

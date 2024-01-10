@@ -63,46 +63,58 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
           auto r = rids[0];
           auto meta = table_info_->table_->GetTuple(r).first;
 
+          // Step1: check write-write conflict
           if (!meta.is_deleted_ || (meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) ||
               (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
             exec_ctx_->GetTransaction()->SetTainted();
-            throw ExecutionException("write-write conflict");
+            throw ExecutionException("insert: write-write conflict meta");
           }
 
-          auto ver_link_op = txn_mgr_->GetVersionLink(r);
-          BUSTUB_ASSERT(ver_link_op.has_value(), "Tuple with index must have version link");
-
-          auto ver_link = ver_link_op.value();
-          if (ver_link.in_progress_) {
-            exec_ctx_->GetTransaction()->SetTainted();
-            throw ExecutionException("write-write conflict");
-          }
-
-          // indicate this version is ongoing by current txn
-          ver_link.in_progress_ = true;
-          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
-
-          // Generate false undo_log
+          // Step2: generate undo log
           std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
           auto new_undo_log = UndoLog{true, mf, {}, meta.ts_};
 
-          auto undo_link = ver_link.prev_;
-          auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+          auto ver_link_op = txn_mgr_->GetVersionLink(r);
+          if (ver_link_op.has_value()) {
+            auto ver_link = ver_link_op.value();
+            if (ver_link.in_progress_) {
+              exec_ctx_->GetTransaction()->SetTainted();
+              throw ExecutionException("insert: write-write conflict in progress");
+            }
 
-          if (meta.ts_ == txn_id_) {
-            // INSERT -> DELETE -> [[INSERT]]
-            new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
-            exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+            // indicate this version is ongoing by current txn
+            ver_link.in_progress_ = true;
+            txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+
+            auto undo_link = ver_link.prev_;
+            auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+
+            if (meta.ts_ == txn_id_) {
+              new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
+              exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+            } else {
+              // new inserted
+              new_undo_log.prev_version_ = undo_link;
+              ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+            }
+
+            TupleMeta to_insert_meta{txn_id_, false};
+            table_info_->table_->UpdateTupleInPlace(to_insert_meta, to_insert_tuple, r, nullptr);
+
+            ver_link.in_progress_ = false;
+            txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
           } else {
-            // new inserted
-            new_undo_log.prev_version_ = undo_link;
-            auto new_link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-            ver_link.prev_ = new_link;
+            TupleMeta to_insert_meta{txn_id_, false};
+            table_info_->table_->UpdateTupleInPlace(to_insert_meta, to_insert_tuple, r, nullptr);
+            if (meta.ts_ == txn_id_) {
+              continue;
+            }
+            txn_mgr_->UpdateUndoLink(r, exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log));
           }
 
-          ver_link.in_progress_ = false;
-          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+          // Step4: add write set
           exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
+          continue;
         }
 
         // create a tuple on the table heap with a transaction temporary timestamp
@@ -118,7 +130,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
                 *new_rid, exec_ctx_->GetTransaction())) {
           // unique key constraint is violated
           exec_ctx_->GetTransaction()->SetTainted();
-          throw ExecutionException("write-write conflict");
+          throw ExecutionException("write-write conflict: already have index");
         }
 
         exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, *new_rid);  // append write set

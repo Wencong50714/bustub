@@ -52,7 +52,6 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     for (const auto &r : rids_) {
       auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
 
-
       std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
       auto new_undo_log = UndoLog{false, mf, tuple_data, meta.ts_};
 

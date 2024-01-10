@@ -42,7 +42,7 @@ auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_t
     auto ver_link = ver_link_op.value();
     if (ver_link.in_progress_) {
       txn->SetTainted();
-      throw ExecutionException("write-write conflict");
+      throw ExecutionException("write-write conflict: version link in progress");
     }
 
     // set ver_link in_progress to true
@@ -53,7 +53,7 @@ auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_t
     if ((meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
       // Two cases need to be aborted
       txn->SetTainted();
-      throw ExecutionException("write-write conflict");
+      throw ExecutionException("write-write conflict: another");
     }
 
     // link undo log to version chain
@@ -119,6 +119,10 @@ auto BoolVectorToString(const std::vector<bool> &boolVector) -> std::string {
  */
 auto OverlayUndoLog(UndoLog &new_undo_log, const UndoLog &old_undo_log, const Schema *schema) -> UndoLog {
   BUSTUB_ASSERT(new_undo_log.modified_fields_.size() == old_undo_log.modified_fields_.size(), "Scheme should be same");
+
+  if (old_undo_log.is_deleted_) {
+    return old_undo_log;
+  }
 
   auto size = new_undo_log.modified_fields_.size();
   std::vector<bool> mf(size, false);
