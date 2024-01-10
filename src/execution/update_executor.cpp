@@ -50,14 +50,100 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   std::vector<Value> ret_values;
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-    for (const auto & r : rids_) {
-      auto tuple_pair = table_info_->table_->GetTuple(r);
-      auto [meta, tuple_data] = tuple_pair;
+    for (const auto &r : rids_) {
+      auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
+      auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
 
-      auto [undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
+      if (meta.ts_ == txn_id_) {
+        auto ver_link_op = txn_mgr_->GetVersionLink(r);
+        if (ver_link_op.has_value()) {
+          // Update undo log
+          auto undo_link = ver_link_op.value().prev_;
+          auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+          new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
+          exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+        }
 
-      UpdateWithVersionLink(r, tuple_pair, to_update_tuple, undo_log, exec_ctx_->GetTransaction(), txn_mgr_,
-                            table_info_, &child_executor_->GetOutputSchema(), plan_->table_oid_);
+        // Modify tuple heap
+        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);
+        continue;
+      }
+
+      auto ver_link_op = txn_mgr_->GetVersionLink(r);
+      if (ver_link_op.has_value()) {
+        auto ver_link = ver_link_op.value();
+        ver_link.in_progress_ = true;
+        if (!txn_mgr_->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
+          // TODO(chenzonghao): optimization: try 5 times then abort
+          exec_ctx_->GetTransaction()->SetTainted();
+          throw ExecutionException("write-write conflict: version link in progress");
+        }
+
+        // 2. Get latest tuple from table
+        auto [new_meta, new_tuple] = table_info_->table_->GetTuple(r);
+
+        // detect write-write conflict
+        if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > ts_)) {
+          // Two cases need to be aborted
+          ver_link.in_progress_ = false;
+          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+
+          exec_ctx_->GetTransaction()->SetTainted();
+          throw ExecutionException("write-write conflict: another");
+        }
+
+        // 3. Generate Undo Log
+        auto log_tuple_pair = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
+        new_undo_log = log_tuple_pair.first;
+        to_update_tuple = log_tuple_pair.second;
+
+        // 4. link undo log to version chain
+        auto undo_link = ver_link.prev_;
+        new_undo_log.prev_version_ = undo_link;
+        ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+
+        // 5. update table heap content
+        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);
+
+        // 6. set in_progress back to false
+        ver_link.in_progress_ = false;
+        txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+      } else {
+        // create a placeholder version link
+        auto ver_link = VersionUndoLink{{}, true};
+        if (!txn_mgr_->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
+          exec_ctx_->GetTransaction()->SetTainted();
+          throw ExecutionException("write-write conflict: version link in progress");
+        }
+
+        // 2. Get latest tuple from table and detect write-write conflict
+        auto [new_meta, new_tuple] = table_info_->table_->GetTuple(r);
+
+        if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > ts_)) {
+          // Two cases need to be aborted
+          ver_link.in_progress_ = false;
+          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+
+          exec_ctx_->GetTransaction()->SetTainted();
+          throw ExecutionException("write-write conflict: another");
+        }
+
+        // 3. generate undo log
+        auto log_tuple_pair = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
+        new_undo_log = log_tuple_pair.first;
+        to_update_tuple = log_tuple_pair.second;
+
+        // 4. link undo log to version chain
+        ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+
+        // 5. update tuple heap contents
+        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);
+
+        // 6. set in_progress back to false
+        ver_link.in_progress_ = false;
+        txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+      }
+      exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
     }
 
     ret_values.emplace_back(INTEGER, static_cast<int>(rids_.size()));
@@ -134,18 +220,6 @@ auto UpdateExecutor::GetPartialAndWholeTuple(Tuple &tuple_data, timestamp_t meta
   auto part = Tuple(part_values, &s);
   auto whole = Tuple(whole_values, &child_executor_->GetOutputSchema());
   auto new_undo_log = UndoLog{false, mf, Tuple{part_values, &s}, meta_ts};
-
-//  if (!table_indexes_.empty()) {
-//    BUSTUB_ASSERT(table_indexes_.size() == 1, "Only support primary key");
-//    auto primary_index = table_indexes_[0];
-//    BUSTUB_ASSERT(primary_index->is_primary_key_,
-//                  "In the case that db only contain one index, it must be primary index");
-//
-//    auto key = Tuple(part_values, &primary_index->key_schema_);
-//    if (IsTupleContentEqual(key, part)) {
-//      modify_pkey_ = true;
-//    }
-//  }
 
   return {new_undo_log, whole};
 }

@@ -6,11 +6,19 @@
 #include "catalog/catalog.h"
 #include "catalog/schema.h"
 #include "concurrency/transaction.h"
+#include "concurrency/transaction_manager.h"
 #include "storage/table/tuple.h"
 
 namespace bustub {
 
-auto UpdateWithVersionLink(const RID &r, const std::pair<TupleMeta, Tuple>& tuple_pair, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
+enum {
+  INSERT_OP = 100,
+  DELETE_OP = 200,
+};
+
+auto VersionLinkCheck(std::optional<VersionUndoLink> link) -> bool;
+
+auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, size_t mf_sz, uint32_t type,
                            Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
                            const Schema *child_schema, table_oid_t t_id) -> void;
 

@@ -61,8 +61,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
           BUSTUB_ASSERT(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
 
           auto r = rids[0];
-          auto tuple_pair = table_info_->table_->GetTuple(r);
-          auto meta = tuple_pair.first;
+          auto meta = table_info_->table_->GetTuple(r).first;
 
           // check write-write conflict
           if (!meta.is_deleted_) {
@@ -70,10 +69,8 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
             throw ExecutionException("insert: write-write conflict meta");
           }
 
-          std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
-          auto undo_log = UndoLog{true, mf, {}, meta.ts_};
-
-          UpdateWithVersionLink(r, tuple_pair, to_insert_tuple, undo_log, exec_ctx_->GetTransaction(), txn_mgr_,
+          size_t mf_sz = child_executor_->GetOutputSchema().GetColumns().size();
+          UpdateWithVersionLink(r, to_insert_tuple, mf_sz, INSERT_OP, exec_ctx_->GetTransaction(), txn_mgr_,
                                 table_info_, &child_executor_->GetOutputSchema(), plan_->table_oid_);
           continue;
         }

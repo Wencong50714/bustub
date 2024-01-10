@@ -315,6 +315,7 @@ TEST(TxnExecutorTest, UpdateTest2) {  // NOLINT
   WithTxn(txn_ref, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 1, 1}}));
   WithTxn(txn1, CheckUndoLogColumn(*bustub, _var, _txn, 3));
   WithTxn(txn1, CommitTxn(*bustub, _var, _txn));
+  TxnMgrDbg("after commit finished", bustub->txn_manager_.get(), table_info, table_info->table_.get());
   auto txn2 = BeginTxn(*bustub, "txn2");
   fmt::println(stderr, "H: check scan txn2");
   WithTxn(txn2, QueryShowResult(*bustub, _var, _txn, query, empty_table));

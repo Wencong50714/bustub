@@ -10,24 +10,53 @@
 
 namespace bustub {
 
-auto UpdateWithVersionLink(const RID &r, const std::pair<TupleMeta, Tuple>& tuple_pair, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
+auto VersionLinkCheck(std::optional<VersionUndoLink> link) -> bool {
+  if (!link.has_value()) {
+    return true;
+  }
+  return !link->in_progress_;
+}
+
+auto UpdateTupleHeap(const RID &r, const std::optional<Tuple> &to_update_tuple, const TableInfo *table_info,
+                     txn_id_t txn_id) {
+  if (to_update_tuple.has_value()) {
+    table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
+  } else {
+    table_info->table_->UpdateTupleMeta({txn_id, true}, r);
+  }
+}
+
+auto GenerateUndoLog(uint32_t type, size_t mf_sz, TupleMeta meta, const Tuple &tuple) -> UndoLog {
+  std::vector<bool> mf(mf_sz, true);
+  UndoLog undo_log;
+
+  switch (type) {
+    case INSERT_OP:
+      undo_log = UndoLog{true, mf, {}, meta.ts_};
+      break;
+    case DELETE_OP:
+      undo_log = UndoLog{false, mf, tuple, meta.ts_};
+      break;
+    default:
+      throw std::runtime_error("type that is neither INSERT_OP and DELETE_OP");
+  }
+
+  return undo_log;
+}
+
+auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, size_t mf_sz, uint32_t type,
                            Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
                            const Schema *child_schema, table_oid_t t_id) -> void {
   auto txn_id = txn->GetTransactionId();
 
-  auto [meta, tuple_data] = tuple_pair;
-
-  // detect write-write conflict
-  if ((meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
-    // Two cases need to be aborted
-    txn->SetTainted();
-    throw ExecutionException("write-write conflict: another");
-  }
+  auto [meta, tuple] = table_info->table_->GetTuple(r);
 
   if (meta.ts_ == txn_id) {
     auto ver_link_op = txn_mgr->GetVersionLink(r);
     if (ver_link_op.has_value()) {
       // Update undo log
+      auto new_undo_log = GenerateUndoLog(type, mf_sz, meta, tuple);
+
       auto undo_link = ver_link_op.value().prev_;
       auto undo_log = txn_mgr->GetUndoLog(undo_link);
       new_undo_log = OverlayUndoLog(new_undo_log, undo_log, child_schema);
@@ -35,11 +64,7 @@ auto UpdateWithVersionLink(const RID &r, const std::pair<TupleMeta, Tuple>& tupl
     }
 
     // Modify tuple heap
-    if (!to_update_tuple.has_value()) {
-      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
-    } else {
-      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
-    }
+    UpdateTupleHeap(r, to_update_tuple, table_info, txn_id);
     return;
   }
 
@@ -47,52 +72,72 @@ auto UpdateWithVersionLink(const RID &r, const std::pair<TupleMeta, Tuple>& tupl
   auto ver_link_op = txn_mgr->GetVersionLink(r);
   if (ver_link_op.has_value()) {
     auto ver_link = ver_link_op.value();
-    if (ver_link.in_progress_) {
+
+    // 1: set ver_link in_progress to true
+    ver_link.in_progress_ = true;
+    if (!txn_mgr->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
+      // TODO(chenzonghao): optimization: try 5 times then abort
       txn->SetTainted();
       throw ExecutionException("write-write conflict: version link in progress");
     }
 
-    // set ver_link in_progress to true
-    ver_link.in_progress_ = true;
-    txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+    // 2. Get latest tuple from table
+    auto [new_meta, new_tuple] = table_info->table_->GetTuple(r);
 
-    // link undo log to version chain
+    // detect write-write conflict
+    if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > txn->GetReadTs())) {
+      // Two cases need to be aborted
+      ver_link.in_progress_ = false;
+      txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict: another");
+    }
+
+    // 3. Generate undo log
+    auto new_undo_log = GenerateUndoLog(type, mf_sz, new_meta, new_tuple);
+
+    // 4. link undo log to version chain
     auto undo_link = ver_link.prev_;
     new_undo_log.prev_version_ = undo_link;
     ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
 
-    // update table heap content
-    if (!to_update_tuple.has_value()) {
-      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
-    } else {
-      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
-    }
+    // 5. update table heap content
+    UpdateTupleHeap(r, to_update_tuple, table_info, txn_id);
 
-    // set in_progress back to false
+    // 6. set in_progress back to false
     ver_link.in_progress_ = false;
     txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
   } else {
     // create a placeholder version link
     auto ver_link = VersionUndoLink{{}, true};
-    txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
-
-    // detect write-write conflict
-    if ((meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
+    if (!txn_mgr->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
       txn->SetTainted();
-      throw ExecutionException("write-write conflict");
+      throw ExecutionException("write-write conflict: version link in progress");
     }
 
-    // link undo log to version chain
+    // 2. Get latest tuple from table and detect write-write conflict
+    auto [new_meta, new_tuple] = table_info->table_->GetTuple(r);
+
+    if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > txn->GetReadTs())) {
+      // Two cases need to be aborted
+      ver_link.in_progress_ = false;
+      txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+
+      txn->SetTainted();
+      throw ExecutionException("write-write conflict: another");
+    }
+
+    // 3. generate undo log
+    auto new_undo_log = GenerateUndoLog(type, mf_sz, new_meta, new_tuple);
+
+    // 4. link undo log to version chain
     ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
 
-    // update tuple heap contents
-    if (!to_update_tuple.has_value()) {
-      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
-    } else {
-      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
-    }
+    // 5. update tuple heap contents
+    UpdateTupleHeap(r, to_update_tuple, table_info, txn_id);
 
-    // set in_progress back to false
+    // 6. set in_progress back to false
     ver_link.in_progress_ = false;
     txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
   }
