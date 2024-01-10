@@ -17,6 +17,13 @@ auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_t
 
   auto [meta, tuple_data] = table_info->table_->GetTuple(r);
 
+  // detect write-write conflict
+  if ((meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
+    // Two cases need to be aborted
+    txn->SetTainted();
+    throw ExecutionException("write-write conflict: another");
+  }
+
   if (meta.ts_ == txn_id) {
     auto ver_link_op = txn_mgr->GetVersionLink(r);
     if (ver_link_op.has_value()) {
@@ -49,16 +56,8 @@ auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_t
     ver_link.in_progress_ = true;
     txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
 
-    // detect write-write conflict
-    if ((meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
-      // Two cases need to be aborted
-      txn->SetTainted();
-      throw ExecutionException("write-write conflict: another");
-    }
-
     // link undo log to version chain
     auto undo_link = ver_link.prev_;
-    auto undo_log = txn_mgr->GetUndoLog(undo_link);
     new_undo_log.prev_version_ = undo_link;
     ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
 
@@ -79,10 +78,12 @@ auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_t
 
     // detect write-write conflict
     if ((meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {
-      // Two cases need to be aborted
       txn->SetTainted();
       throw ExecutionException("write-write conflict");
     }
+
+    // link undo log to version chain
+    ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
 
     // update tuple heap contents
     if (!to_update_tuple.has_value()) {
@@ -91,8 +92,9 @@ auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_t
       table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
     }
 
+    // set in_progress back to false
     ver_link.in_progress_ = false;
-    txn_mgr->UpdateUndoLink(r, txn->AppendUndoLog(new_undo_log));
+    txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
   }
 
   // add write set
