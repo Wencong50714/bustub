@@ -10,12 +10,12 @@
 
 namespace bustub {
 
-auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
+auto UpdateWithVersionLink(const RID &r, const std::pair<TupleMeta, Tuple>& tuple_pair, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
                            Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
                            const Schema *child_schema, table_oid_t t_id) -> void {
   auto txn_id = txn->GetTransactionId();
 
-  auto [meta, tuple_data] = table_info->table_->GetTuple(r);
+  auto [meta, tuple_data] = tuple_pair;
 
   // detect write-write conflict
   if ((meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id) || (meta.ts_ < TXN_START_ID && meta.ts_ > txn->GetReadTs())) {

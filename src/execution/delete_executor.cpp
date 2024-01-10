@@ -50,12 +50,13 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
     for (const auto &r : rids_) {
-      auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
+      auto tuple_pair = table_info_->table_->GetTuple(r);
+      auto [meta, tuple_data] = tuple_pair;
 
       std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
       auto new_undo_log = UndoLog{false, mf, tuple_data, meta.ts_};
 
-      UpdateWithVersionLink(r, std::nullopt, new_undo_log, exec_ctx_->GetTransaction(), txn_mgr_, table_info_,
+      UpdateWithVersionLink(r, tuple_pair, std::nullopt, new_undo_log, exec_ctx_->GetTransaction(), txn_mgr_, table_info_,
                             &child_executor_->GetOutputSchema(), plan_->table_oid_);
     }
     values.emplace_back(INTEGER, static_cast<int>(rids_.size()));

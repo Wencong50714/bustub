@@ -10,7 +10,7 @@
 
 namespace bustub {
 
-auto UpdateWithVersionLink(const RID &r, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
+auto UpdateWithVersionLink(const RID &r, const std::pair<TupleMeta, Tuple>& tuple_pair, const std::optional<Tuple> &to_update_tuple, UndoLog &new_undo_log,
                            Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
                            const Schema *child_schema, table_oid_t t_id) -> void;
 

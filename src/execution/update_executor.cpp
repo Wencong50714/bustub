@@ -51,11 +51,12 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
     for (const auto & r : rids_) {
-      auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
+      auto tuple_pair = table_info_->table_->GetTuple(r);
+      auto [meta, tuple_data] = tuple_pair;
 
       auto [undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
 
-      UpdateWithVersionLink(r, to_update_tuple, undo_log, exec_ctx_->GetTransaction(), txn_mgr_,
+      UpdateWithVersionLink(r, tuple_pair, to_update_tuple, undo_log, exec_ctx_->GetTransaction(), txn_mgr_,
                             table_info_, &child_executor_->GetOutputSchema(), plan_->table_oid_);
     }
 

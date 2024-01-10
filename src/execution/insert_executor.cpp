@@ -61,83 +61,20 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
           BUSTUB_ASSERT(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
 
           auto r = rids[0];
-          auto meta = table_info_->table_->GetTuple(r).first;
+          auto tuple_pair = table_info_->table_->GetTuple(r);
+          auto meta = tuple_pair.first;
 
           // check write-write conflict
-          if (!meta.is_deleted_ || (meta.ts_ >= TXN_START_ID && meta.ts_ != txn_id_) ||
-              (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
+          if (!meta.is_deleted_) {
             exec_ctx_->GetTransaction()->SetTainted();
             throw ExecutionException("insert: write-write conflict meta");
           }
 
           std::vector<bool> mf(child_executor_->GetOutputSchema().GetColumns().size(), true);
-          auto new_undo_log = UndoLog{true, mf, {}, meta.ts_};
+          auto undo_log = UndoLog{true, mf, {}, meta.ts_};
 
-          if (meta.ts_ == txn_id_) {
-            auto ver_link_op = txn_mgr_->GetVersionLink(r);
-            if (ver_link_op.has_value()) {
-              auto undo_link = ver_link_op.value().prev_;
-              auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-              new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
-              exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
-            }
-
-            TupleMeta to_insert_meta{txn_id_, false};
-            table_info_->table_->UpdateTupleInPlace(to_insert_meta, to_insert_tuple, r, nullptr);
-            // modify itself, don't need to add write set
-            continue;
-          }
-
-          auto ver_link_op = txn_mgr_->GetVersionLink(r);
-          if (ver_link_op.has_value()) {
-            auto ver_link = ver_link_op.value();
-            if (ver_link.in_progress_) {
-              exec_ctx_->GetTransaction()->SetTainted();
-              throw ExecutionException("insert: write-write conflict in progress");
-            }
-
-            // set ver_link in_progress to true
-            ver_link.in_progress_ = true;
-            txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
-
-            // link undo log to version chain
-            auto undo_link = ver_link.prev_;
-            auto undo_log = txn_mgr_->GetUndoLog(undo_link);
-            new_undo_log.prev_version_ = undo_link;
-            ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-
-            // update table heap content
-            TupleMeta to_insert_meta{txn_id_, false};
-            table_info_->table_->UpdateTupleInPlace(to_insert_meta, to_insert_tuple, r, nullptr);
-
-            // set in_progress back to false
-            ver_link.in_progress_ = false;
-            txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
-          } else {
-            // create a placeholder version link
-            auto ver_link = VersionUndoLink{{}, true};
-            txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
-
-            // detect write-write conflict
-            if (!meta.is_deleted_ || (meta.ts_ >= TXN_START_ID) || (meta.ts_ < TXN_START_ID && meta.ts_ > ts_)) {
-              exec_ctx_->GetTransaction()->SetTainted();
-              throw ExecutionException("insert: write-write conflict meta");
-            }
-
-            // link undo log to version chain
-            ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
-
-            // update tuple heap contents
-            TupleMeta to_insert_meta{txn_id_, false};
-            table_info_->table_->UpdateTupleInPlace(to_insert_meta, to_insert_tuple, r, nullptr);
-
-            // set in_progress back to false
-            ver_link.in_progress_ = false;
-            txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
-          }
-
-          // Step4: add write set
-          exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
+          UpdateWithVersionLink(r, tuple_pair, to_insert_tuple, undo_log, exec_ctx_->GetTransaction(), txn_mgr_,
+                                table_info_, &child_executor_->GetOutputSchema(), plan_->table_oid_);
           continue;
         }
 
