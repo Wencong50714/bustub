@@ -174,16 +174,17 @@ TEST(TxnIndexTest, IndexConcurrentUpdateTest) {  // NOLINT
     std::map<int, int> winner_stats;
     for (int i = 0; i < number_cnt; i++) {
       int winner = 0;
-      //      std::cout << "DEBUG: num " << i << " winner: ";
+//            std::cout << "DEBUG: num " << i << " winner: ";
       for (int j = 0; j < thread_cnt; j++) {
         if (operation_result[j][i]) {
-          //          std::cout << "thread " << j << ' ';
+//                    std::cout << "thread " << j << ' ';
           winner += (1 << j);
         }
       }
       expected_rows.push_back({i, winner});
-      //      std::cout << '\n';
+//            std::cout << '\n';
     }
+//    std::cout << "----------------------------------" << '\n';
     auto query_txn = BeginTxn(*bustub, "query_txn");
     WithTxn(query_txn, QueryShowResult(*bustub, _var, _txn, "SELECT * FROM maintable", expected_rows));
     TableHeapEntryNoMoreThan(*bustub, bustub->catalog_->GetTable("maintable"), number_cnt);

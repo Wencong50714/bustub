@@ -17,6 +17,11 @@ auto VersionLinkCheck(std::optional<VersionUndoLink> link) -> bool {
   return !link->in_progress_;
 }
 
+auto TupleHeapCheck(const TupleMeta &meta, const Tuple &table, RID rid) -> bool {
+  // TODO: what should be check
+  return meta.ts_ > TXN_START_ID;
+}
+
 auto UpdateTupleHeap(const RID &r, const std::optional<Tuple> &to_update_tuple, const TableInfo *table_info,
                      txn_id_t txn_id) {
   if (to_update_tuple.has_value()) {
@@ -64,19 +69,22 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
     }
 
     // Modify tuple heap
-    UpdateTupleHeap(r, to_update_tuple, table_info, txn_id);
+    // TODO: so do we need to check below modify stmt to avoid race ?
+    if (to_update_tuple.has_value()) {
+      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r, TupleHeapCheck);
+    } else {
+      table_info->table_->UpdateTupleMeta({txn_id, true}, r);
+    }
     return;
   }
 
   // check and modify version link
   auto ver_link_op = txn_mgr->GetVersionLink(r);
   if (ver_link_op.has_value()) {
-    auto ver_link = ver_link_op.value();
-
     // 1: set ver_link in_progress to true
+    auto ver_link = ver_link_op.value();
     ver_link.in_progress_ = true;
     if (!txn_mgr->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
-      // TODO(chenzonghao): optimization: try 5 times then abort
       txn->SetTainted();
       throw ExecutionException("write-write conflict: version link in progress");
     }

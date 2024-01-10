@@ -52,9 +52,10 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
     for (const auto &r : rids_) {
       auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
-      auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
 
       if (meta.ts_ == txn_id_) {
+        auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
+
         auto ver_link_op = txn_mgr_->GetVersionLink(r);
         if (ver_link_op.has_value()) {
           // Update undo log
@@ -65,16 +66,16 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         }
 
         // Modify tuple heap
-        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);
+        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, TupleHeapCheck);
         continue;
       }
 
       auto ver_link_op = txn_mgr_->GetVersionLink(r);
       if (ver_link_op.has_value()) {
+        // 1: set ver_link in_progress to true
         auto ver_link = ver_link_op.value();
         ver_link.in_progress_ = true;
         if (!txn_mgr_->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
-          // TODO(chenzonghao): optimization: try 5 times then abort
           exec_ctx_->GetTransaction()->SetTainted();
           throw ExecutionException("write-write conflict: version link in progress");
         }
@@ -92,10 +93,8 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
           throw ExecutionException("write-write conflict: another");
         }
 
-        // 3. Generate Undo Log
-        auto log_tuple_pair = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
-        new_undo_log = log_tuple_pair.first;
-        to_update_tuple = log_tuple_pair.second;
+        // 3. Generate Undo Log and to_update_tuple
+        auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
 
         // 4. link undo log to version chain
         auto undo_link = ver_link.prev_;
@@ -129,9 +128,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         }
 
         // 3. generate undo log
-        auto log_tuple_pair = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
-        new_undo_log = log_tuple_pair.first;
-        to_update_tuple = log_tuple_pair.second;
+        auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
 
         // 4. link undo log to version chain
         ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
@@ -143,6 +140,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         ver_link.in_progress_ = false;
         txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
       }
+
       exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, r);
     }
 
