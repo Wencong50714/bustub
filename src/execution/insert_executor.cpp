@@ -47,9 +47,9 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
     if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
       if (!table_indexes_.empty()) {
         // If table have index
-        BUSTUB_ASSERT(table_indexes_.size() == 1, "Only support primary key");
+        BUSTUB_ENSURE(table_indexes_.size() == 1, "Only support primary key");
         auto primary_index = table_indexes_[0];
-        BUSTUB_ASSERT(primary_index->is_primary_key_,
+        BUSTUB_ENSURE(primary_index->is_primary_key_,
                       "In the case that db only contain one index, it must be primary index");
 
         std::vector<RID> rids{};
@@ -58,7 +58,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
                                        &rids, exec_ctx_->GetTransaction());
 
         if (!rids.empty()) {
-          BUSTUB_ASSERT(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
+          BUSTUB_ENSURE(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
 
           auto r = rids[0];
           auto meta = table_info_->table_->GetTuple(r).first;
@@ -79,7 +79,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         TupleMeta meta{txn_id_, false};
         auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
                                                         exec_ctx_->GetTransaction(), plan_->table_oid_);
-        BUSTUB_ASSERT(new_rid.has_value(), "New allocated tuple must have valid rid");
+        BUSTUB_ENSURE(new_rid.has_value(), "New allocated tuple must have valid rid");
 
         // insert index entry
         if (!primary_index->index_->InsertEntry(
@@ -98,7 +98,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         TupleMeta meta{txn_id_, false};
         auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
                                                         exec_ctx_->GetTransaction(), plan_->table_oid_);
-        BUSTUB_ASSERT(new_rid.has_value(), "New allocated tuple must have valid rid");
+        BUSTUB_ENSURE(new_rid.has_value(), "New allocated tuple must have valid rid");
 
         exec_ctx_->GetTransaction()->AppendWriteSet(plan_->table_oid_, *new_rid);  // append write set
         txn_mgr_->UpdateUndoLink(*new_rid, std::nullopt, nullptr);
@@ -107,7 +107,7 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       TupleMeta meta{INVALID_TXN_ID, false};
       auto new_rid = table_info_->table_->InsertTuple(meta, to_insert_tuple, exec_ctx_->GetLockManager(),
                                                       exec_ctx_->GetTransaction(), plan_->table_oid_);
-      BUSTUB_ASSERT(new_rid.has_value(), "New allocated tuple must have valid rid");
+      BUSTUB_ENSURE(new_rid.has_value(), "New allocated tuple must have valid rid");
 
       for (auto index : table_indexes_) {
         index->index_->InsertEntry(

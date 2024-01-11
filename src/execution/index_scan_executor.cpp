@@ -46,8 +46,10 @@ void IndexScanExecutor::Init() {
   auto *index_info = exec_ctx_->GetCatalog()->GetIndex(plan_->GetIndexOid());
   htable_ = dynamic_cast<HashTableIndexForTwoIntegerColumn *>(index_info->index_.get());
 
-  Value v = plan_->pred_key_->val_;
-  std::vector<Value> values{v};
+  const auto *right_expr =
+      dynamic_cast<const ConstantValueExpression *>(plan_->filter_predicate_->children_[1].get());
+  Value v = right_expr->val_;
+  std::vector<Value> values = {v};
   htable_->ScanKey(Tuple(values, index_info->index_->GetKeySchema()), &rids_, exec_ctx_->GetTransaction());
   rid_iter_ = rids_.begin();  // Get the result in rids_ for later use
 

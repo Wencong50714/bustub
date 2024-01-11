@@ -60,13 +60,15 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         if (ver_link_op.has_value()) {
           // Update undo log
           auto undo_link = ver_link_op.value().prev_;
-          auto undo_log = txn_mgr_->GetUndoLog(undo_link);
+          auto undo_log_op = txn_mgr_->GetUndoLogOptional(undo_link);
+          BUSTUB_ENSURE(undo_log_op.has_value(), "undo_log_op must have value");
+          auto undo_log = undo_log_op.value();
           new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
         }
 
         // Modify tuple heap
-        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, TupleHeapCheck);
+        table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);
         continue;
       }
 
@@ -99,7 +101,8 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         // 4. link undo log to version chain
         auto undo_link = ver_link.prev_;
         new_undo_log.prev_version_ = undo_link;
-        ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+        auto link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+        ver_link.prev_ = link;
 
         // 5. update table heap content
         table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);
@@ -121,7 +124,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > ts_)) {
           // Two cases need to be aborted
           ver_link.in_progress_ = false;
-          txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
+          txn_mgr_->UpdateVersionLink(r, std::nullopt, nullptr);
 
           exec_ctx_->GetTransaction()->SetTainted();
           throw ExecutionException("write-write conflict: another");
@@ -131,7 +134,8 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(new_tuple, new_meta.ts_);
 
         // 4. link undo log to version chain
-        ver_link.prev_ = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+        auto link = exec_ctx_->GetTransaction()->AppendUndoLog(new_undo_log);
+        ver_link.prev_ = link;
 
         // 5. update tuple heap contents
         table_info_->table_->UpdateTupleInPlace({txn_id_, false}, to_update_tuple, r, nullptr);

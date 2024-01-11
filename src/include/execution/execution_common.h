@@ -18,8 +18,6 @@ enum {
 
 auto VersionLinkCheck(std::optional<VersionUndoLink> link) -> bool;
 
-auto TupleHeapCheck(const TupleMeta &meta, const Tuple &table, RID rid) -> bool;
-
 auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, size_t mf_sz, uint32_t type,
                            Transaction *txn, TransactionManager *txn_mgr, const TableInfo *table_info,
                            const Schema *child_schema, table_oid_t t_id) -> void;

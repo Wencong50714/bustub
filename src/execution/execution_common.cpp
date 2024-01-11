@@ -17,15 +17,10 @@ auto VersionLinkCheck(std::optional<VersionUndoLink> link) -> bool {
   return !link->in_progress_;
 }
 
-auto TupleHeapCheck(const TupleMeta &meta, const Tuple &table, RID rid) -> bool {
-  // TODO: what should be check
-  return meta.ts_ > TXN_START_ID;
-}
-
 auto UpdateTupleHeap(const RID &r, const std::optional<Tuple> &to_update_tuple, const TableInfo *table_info,
                      txn_id_t txn_id) {
   if (to_update_tuple.has_value()) {
-    table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r);
+    table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r, nullptr);
   } else {
     table_info->table_->UpdateTupleMeta({txn_id, true}, r);
   }
@@ -63,15 +58,18 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
       auto new_undo_log = GenerateUndoLog(type, mf_sz, meta, tuple);
 
       auto undo_link = ver_link_op.value().prev_;
-      auto undo_log = txn_mgr->GetUndoLog(undo_link);
+
+      // version link may have invalid value
+      auto undo_log_op = txn_mgr->GetUndoLogOptional(undo_link);
+      BUSTUB_ENSURE(undo_log_op.has_value(), "undo_log_op must have value");
+      auto undo_log = undo_log_op.value();
       new_undo_log = OverlayUndoLog(new_undo_log, undo_log, child_schema);
       txn->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
     }
 
     // Modify tuple heap
-    // TODO: so do we need to check below modify stmt to avoid race ?
     if (to_update_tuple.has_value()) {
-      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r, TupleHeapCheck);
+      table_info->table_->UpdateTupleInPlace({txn_id, false}, to_update_tuple.value(), r, nullptr);
     } else {
       table_info->table_->UpdateTupleMeta({txn_id, true}, r);
     }
@@ -108,7 +106,8 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
     // 4. link undo log to version chain
     auto undo_link = ver_link.prev_;
     new_undo_log.prev_version_ = undo_link;
-    ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
+    auto link = txn->AppendUndoLog(new_undo_log);
+    ver_link.prev_ = link;
 
     // 5. update table heap content
     UpdateTupleHeap(r, to_update_tuple, table_info, txn_id);
@@ -130,7 +129,7 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
     if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > txn->GetReadTs())) {
       // Two cases need to be aborted
       ver_link.in_progress_ = false;
-      txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
+      txn_mgr->UpdateVersionLink(r, std::nullopt, nullptr);
 
       txn->SetTainted();
       throw ExecutionException("write-write conflict: another");
@@ -140,7 +139,8 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
     auto new_undo_log = GenerateUndoLog(type, mf_sz, new_meta, new_tuple);
 
     // 4. link undo log to version chain
-    ver_link.prev_ = txn->AppendUndoLog(new_undo_log);
+    auto link = txn->AppendUndoLog(new_undo_log);
+    ver_link.prev_ = link;
 
     // 5. update tuple heap contents
     UpdateTupleHeap(r, to_update_tuple, table_info, txn_id);
@@ -173,7 +173,7 @@ auto BoolVectorToString(const std::vector<bool> &boolVector) -> std::string {
  * @return The overlaid undo log
  */
 auto OverlayUndoLog(UndoLog &new_undo_log, const UndoLog &old_undo_log, const Schema *schema) -> UndoLog {
-  BUSTUB_ASSERT(new_undo_log.modified_fields_.size() == old_undo_log.modified_fields_.size(), "Scheme should be same");
+  BUSTUB_ENSURE(new_undo_log.modified_fields_.size() == old_undo_log.modified_fields_.size(), "Scheme should be same");
 
   if (old_undo_log.is_deleted_) {
     return old_undo_log;
