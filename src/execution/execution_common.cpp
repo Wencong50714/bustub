@@ -54,17 +54,23 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
   if (meta.ts_ == txn_id) {
     auto ver_link_op = txn_mgr->GetVersionLink(r);
     if (ver_link_op.has_value()) {
-      // Update undo log
-      auto new_undo_log = GenerateUndoLog(type, mf_sz, meta, tuple);
-
       auto undo_link = ver_link_op.value().prev_;
-
-      // version link may have invalid value
       auto undo_log_op = txn_mgr->GetUndoLogOptional(undo_link);
-      BUSTUB_ENSURE(undo_log_op.has_value(), "undo_log_op must have value");
-      auto undo_log = undo_log_op.value();
-      new_undo_log = OverlayUndoLog(new_undo_log, undo_log, child_schema);
-      txn->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+      if (undo_log_op.has_value()) {
+        auto undo_log = undo_log_op.value();
+        auto new_undo_log = GenerateUndoLog(type, mf_sz, meta, tuple);
+
+        new_undo_log = OverlayUndoLog(new_undo_log, undo_log, child_schema);
+        txn->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
+      }
+//      TxnMgrDbg("..", txn_mgr, table_info, table_info->table_.get());
+//      if (to_update_tuple.has_value()) {
+//        std::cout << "INSERT tuple is" << to_update_tuple.value().ToString(child_schema) << ' ';
+//      } else {
+//        std::cout << "DELETE rid is: " << r.ToString() << ' ';
+//      }
+//      std::cout << "  cur txn_id is " << (txn_id - TXN_START_ID) << '\n';
+//      BUSTUB_ENSURE(undo_log_op.has_value(), "undo log must valid");
     }
 
     // Modify tuple heap
@@ -117,7 +123,7 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
     txn_mgr->UpdateVersionLink(r, ver_link, nullptr);
   } else {
     // create a placeholder version link
-    auto ver_link = VersionUndoLink{{}, true};
+    auto ver_link = VersionUndoLink{{INVALID_TXN_ID, 0}, true};
     if (!txn_mgr->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
       txn->SetTainted();
       throw ExecutionException("write-write conflict: version link in progress");
@@ -128,7 +134,6 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
 
     if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > txn->GetReadTs())) {
       // Two cases need to be aborted
-      ver_link.in_progress_ = false;
       txn_mgr->UpdateVersionLink(r, std::nullopt, nullptr);
 
       txn->SetTainted();

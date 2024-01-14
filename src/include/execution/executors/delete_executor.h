@@ -69,9 +69,7 @@ class DeleteExecutor : public AbstractExecutor {
 
   bool is_end_;
 
-  timestamp_t ts_;
   TransactionManager *txn_mgr_;
-  txn_id_t txn_id_;
 
   std::vector<RID> rids_{};
 };

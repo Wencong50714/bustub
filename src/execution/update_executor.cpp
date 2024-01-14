@@ -39,6 +39,13 @@ void UpdateExecutor::Init() {
     while (child_executor_->Next(&child_tuple, &rid)) {
       rids_.push_back(rid);
     }
+
+    if (rids_.empty()) {
+      exec_ctx_->GetTransaction()->SetTainted();
+      throw ExecutionException("read-write conflict: read nothing");
+//      TxnMgrDbg("..", txn_mgr_, table_info_, table_info_->table_.get());
+//      BUSTUB_ENSURE(false, fmt::format("update: expected 1 element, but found {}: {}", rids_.size(), plan_->ToString()));
+    }
   }
 }
 
@@ -54,15 +61,17 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       auto [meta, tuple_data] = table_info_->table_->GetTuple(r);
 
       if (meta.ts_ == txn_id_) {
+        auto ver_link_op = txn_mgr_->GetVersionLink(r);
+
         auto [new_undo_log, to_update_tuple] = GetPartialAndWholeTuple(tuple_data, meta.ts_);
 
-        auto ver_link_op = txn_mgr_->GetVersionLink(r);
         if (ver_link_op.has_value()) {
-          // Update undo log
           auto undo_link = ver_link_op.value().prev_;
           auto undo_log_op = txn_mgr_->GetUndoLogOptional(undo_link);
-          BUSTUB_ENSURE(undo_log_op.has_value(), "undo_log_op must have value");
+          BUSTUB_ENSURE(undo_log_op.has_value(), "update: undo log must valid");
+
           auto undo_log = undo_log_op.value();
+
           new_undo_log = OverlayUndoLog(new_undo_log, undo_log, &child_executor_->GetOutputSchema());
           exec_ctx_->GetTransaction()->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
         }
@@ -112,7 +121,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         txn_mgr_->UpdateVersionLink(r, ver_link, nullptr);
       } else {
         // create a placeholder version link
-        auto ver_link = VersionUndoLink{{}, true};
+        auto ver_link = VersionUndoLink{{INVALID_TXN_ID, 0}, true};
         if (!txn_mgr_->UpdateVersionLink(r, ver_link, VersionLinkCheck)) {
           exec_ctx_->GetTransaction()->SetTainted();
           throw ExecutionException("write-write conflict: version link in progress");
@@ -123,7 +132,6 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
         if ((new_meta.ts_ > TXN_START_ID) || (new_meta.ts_ < TXN_START_ID && new_meta.ts_ > ts_)) {
           // Two cases need to be aborted
-          ver_link.in_progress_ = false;
           txn_mgr_->UpdateVersionLink(r, std::nullopt, nullptr);
 
           exec_ctx_->GetTransaction()->SetTainted();

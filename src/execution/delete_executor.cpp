@@ -28,9 +28,7 @@ void DeleteExecutor::Init() {
   table_indexes_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 
   if (exec_ctx_->GetTransaction()->GetIsolationLevel() == IsolationLevel::SNAPSHOT_ISOLATION) {
-    ts_ = exec_ctx_->GetTransaction()->GetReadTs();
     txn_mgr_ = exec_ctx_->GetTransactionManager();
-    txn_id_ = exec_ctx_->GetTransaction()->GetTransactionId();
 
     // Since update executor is pipeline breaker
     Tuple child_tuple{};
@@ -38,6 +36,9 @@ void DeleteExecutor::Init() {
     while (child_executor_->Next(&child_tuple, &rid)) {
       rids_.push_back(rid);
     }
+
+    BUSTUB_ENSURE(!rids_.empty(), "Delete: It's impossible that rids is empty");
+    BUSTUB_ENSURE(rids_.size() == 1, "delete: only handle one element");
   }
 }
 
