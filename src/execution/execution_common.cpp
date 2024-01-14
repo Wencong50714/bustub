@@ -63,14 +63,14 @@ auto UpdateWithVersionLink(const RID &r, std::optional<Tuple> to_update_tuple, s
         new_undo_log = OverlayUndoLog(new_undo_log, undo_log, child_schema);
         txn->ModifyUndoLog(undo_link.prev_log_idx_, new_undo_log);
       }
-//      TxnMgrDbg("..", txn_mgr, table_info, table_info->table_.get());
-//      if (to_update_tuple.has_value()) {
-//        std::cout << "INSERT tuple is" << to_update_tuple.value().ToString(child_schema) << ' ';
-//      } else {
-//        std::cout << "DELETE rid is: " << r.ToString() << ' ';
-//      }
-//      std::cout << "  cur txn_id is " << (txn_id - TXN_START_ID) << '\n';
-//      BUSTUB_ENSURE(undo_log_op.has_value(), "undo log must valid");
+      //      TxnMgrDbg("..", txn_mgr, table_info, table_info->table_.get());
+      //      if (to_update_tuple.has_value()) {
+      //        std::cout << "INSERT tuple is" << to_update_tuple.value().ToString(child_schema) << ' ';
+      //      } else {
+      //        std::cout << "DELETE rid is: " << r.ToString() << ' ';
+      //      }
+      //      std::cout << "  cur txn_id is " << (txn_id - TXN_START_ID) << '\n';
+      //      BUSTUB_ENSURE(undo_log_op.has_value(), "undo log must valid");
     }
 
     // Modify tuple heap

@@ -43,8 +43,9 @@ void UpdateExecutor::Init() {
     if (rids_.empty()) {
       exec_ctx_->GetTransaction()->SetTainted();
       throw ExecutionException("read-write conflict: read nothing");
-//      TxnMgrDbg("..", txn_mgr_, table_info_, table_info_->table_.get());
-//      BUSTUB_ENSURE(false, fmt::format("update: expected 1 element, but found {}: {}", rids_.size(), plan_->ToString()));
+      //      TxnMgrDbg("..", txn_mgr_, table_info_, table_info_->table_.get());
+      //      BUSTUB_ENSURE(false, fmt::format("update: expected 1 element, but found {}: {}", rids_.size(),
+      //      plan_->ToString()));
     }
   }
 }

@@ -37,8 +37,6 @@ void DeleteExecutor::Init() {
       rids_.push_back(rid);
     }
 
-    BUSTUB_ENSURE(!rids_.empty(), "Delete: It's impossible that rids is empty");
-    BUSTUB_ENSURE(rids_.size() == 1, "delete: only handle one element");
   }
 }
 
