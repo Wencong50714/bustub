@@ -36,7 +36,6 @@ void DeleteExecutor::Init() {
     while (child_executor_->Next(&child_tuple, &rid)) {
       rids_.push_back(rid);
     }
-
   }
 }
 
