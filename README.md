@@ -1,3 +1,10 @@
+## Score
+- Project0: 100/100
+- Project1: 100/100
+- Project2: 100/100
+- Project3: 85/100
+- Project4: 97/100
+
 <img src="logo/bustub-whiteborder.svg" alt="BusTub Logo" height="200">
 
 -----------------
