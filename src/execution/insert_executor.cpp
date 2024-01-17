@@ -56,7 +56,6 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         primary_index->index_->ScanKey(to_insert_tuple.KeyFromTuple(table_info_->schema_, primary_index->key_schema_,
                                                                     primary_index->index_->GetKeyAttrs()),
                                        &rids, exec_ctx_->GetTransaction());
-
         if (!rids.empty()) {
           BUSTUB_ENSURE(rids.size() == 1, "Should only scan 1 rid, since we always update in place");
 

@@ -78,6 +78,10 @@ class UpdateExecutor : public AbstractExecutor {
 
   std::vector<RID> rids_{};
 
+  bool modify_primary_{};
+
   auto GetPartialAndWholeTuple(Tuple &tuple_data, timestamp_t meta_ts) -> std::pair<UndoLog, Tuple>;
+
+  auto CheckModifyPrimaryKey();
 };
 }  // namespace bustub
