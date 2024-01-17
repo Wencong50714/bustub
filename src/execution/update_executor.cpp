@@ -18,7 +18,7 @@
 namespace bustub {
 
 auto UpdateExecutor::CheckModifyPrimaryKey() {
-  for (const auto & expr : plan_->target_expressions_) {
+  for (const auto &expr : plan_->target_expressions_) {
     auto str = expr->ToString();
     std::regex pattern(R"(\(#0\.0[+\-]([0-9])\))");
     if (std::regex_match(str, pattern)) {
