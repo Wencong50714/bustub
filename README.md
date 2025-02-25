@@ -1,8 +1,12 @@
+## 声明
+
+由于本人进行考研复试，我将暂时公开我的repository。秉持诚信原则，在考研复试结束后，我会即刻将其重新设置为私有状态 。 
+
 ## Score
 - Project0: 100/100
 - Project1: 100/100
 - Project2: 100/100
-- Project3: 85/100
+- Project3: 85/100 (本地测试全部通过)
 - Project4: 97/100
 
 <img src="logo/bustub-whiteborder.svg" alt="BusTub Logo" height="200">
